@@ -10,7 +10,7 @@ export const suggestCategory = async (description: string): Promise<string | nul
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Categorize this transaction description into strictly one of these categories (return only the category name in Polish): Jedzenie, Transport, Mieszkanie, Rozrywka, Zdrowie, Inne. Description: "${description}"`,
+      contents: `Categorize this transaction description into strictly one of these categories (return only the category name in Polish): Jedzenie, Transport, Mieszkanie, Rozrywka, Zdrowie, Zakupy, Kredyt, Inwestycje, Przelew własny, Inne. Description: "${description}"`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -24,6 +24,10 @@ export const suggestCategory = async (description: string): Promise<string | nul
                 'Mieszkanie',
                 'Rozrywka',
                 'Zdrowie',
+                'Zakupy',
+                'Kredyt',
+                'Inwestycje',
+                'Przelew własny',
                 'Inne'
               ]
             }
@@ -44,7 +48,7 @@ export const getFinancialAdvice = async (transactions: Transaction[]): Promise<s
   if (!apiKey || transactions.length === 0) return "Dodaj więcej transakcji, aby otrzymać analizę AI.";
 
   // Simplify data to save tokens
-  const summary = transactions.slice(0, 50).map(t => `${t.date}: ${t.description} (${t.amount} PLN, ${t.type})`).join('\n');
+  const summary = transactions.slice(0, 50).map(t => `${t.date}: ${t.description} (${t.amount} PLN, ${t.type}, ${t.category})`).join('\n');
 
   try {
     const response = await ai.models.generateContent({

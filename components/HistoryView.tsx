@@ -140,9 +140,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, onEdit, 
                           <Edit2 size={16} />
                         </button>
                         <button 
-                          onClick={() => {
-                            if(confirm('Czy na pewno chcesz usunąć tę transakcję?')) onDelete(t.id);
-                          }}
+                          onClick={() => onDelete(t.id)}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Usuń"
                         >

@@ -23,6 +23,14 @@ interface GroupedTransaction {
   enabled: boolean; // Is this group enabled for bulk update?
 }
 
+// Common bank prefixes to ignore when generating group signatures
+const IGNORED_PREFIXES = [
+  'platnosc', 'płatność', 'transakcja', 'karta', 'kartą', 'zakup', 
+  'przelew', 'terminal', 'pos', 'nr', 'rezerwacja', 'oplata', 'opłata',
+  'wyplata', 'wypłata', 'obciazenie', 'obciążenie', 'blokada', 'sprzedaż', 
+  'zlec', 'zlecenie', 'tytul', 'tytułem', 'numer', 'rachunek', 'faktura', 'vat'
+];
+
 export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport }) => {
   const [step, setStep] = useState<ImportStep>('UPLOAD');
   const [importedFile, setImportedFile] = useState<File | null>(null);
@@ -56,7 +64,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
           const rows = results.data as string[][];
           setRawFile(rows.slice(0, 6)); // Keep first few rows for preview
           setStep('MAP');
-          guessMappings(rows[0], rows[1]);
+          guessMappings(rows);
         } else {
           setError('Plik wydaje się pusty lub uszkodzony.');
         }
@@ -67,24 +75,61 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     });
   };
 
-  const guessMappings = (headerRow: string[], firstDataRow: string[]) => {
+  const guessMappings = (rows: string[][]) => {
+    // Analyze the first data row (or header if strict) to determine types
+    const headerRow = rows[0];
+    const dataRow = rows.length > 1 ? rows[1] : rows[0];
+    
     const newMappings: Record<number, ColumnMapping> = {};
-    const rowToAnalyze = firstDataRow || headerRow;
+    
+    // Helper to check for date
+    const isDate = (val: string) => /^\d{4}-\d{2}-\d{2}/.test(val) || /^\d{2}[.-]\d{2}[.-]\d{4}/.test(val);
+    // Helper to check for amount (allow some looseness)
+    const isAmount = (val: string) => /^-?\d+[.,\s]?\d*[.,]?\d*$/.test(val) || val.includes('PLN') || val.includes('zł');
 
-    rowToAnalyze.forEach((cell, index) => {
+    // Find the longest column -> likely description
+    let maxLen = 0;
+    let descIndex = -1;
+
+    dataRow.forEach((cell, index) => {
       const val = cell.trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(val) || /^\d{2}[.-]\d{2}[.-]\d{4}$/.test(val)) {
+      const len = val.length;
+
+      // Identify Date
+      if (isDate(val)) {
         newMappings[index] = 'date';
+        return;
       }
-      else if (/^-?\d+[.,\s]?\d*[.,]?\d*$/.test(val) || val.includes('PLN') || val.includes('zł')) {
+      
+      // Identify Amount (only if not date)
+      if (isAmount(val) && len < 20) { // Amounts usually aren't super long strings
         newMappings[index] = 'amount';
+        return;
       }
-      else if (val.length > 5) {
-        newMappings[index] = 'description';
-      } else {
-        newMappings[index] = 'skip';
+
+      // Identify Potential Category
+      if (['kategoria', 'category', 'typ', 'rodzaj'].some(k => headerRow[index]?.toLowerCase().includes(k))) {
+         newMappings[index] = 'category';
+         return;
+      }
+
+      // Track longest text column for description fallback
+      if (len > maxLen) {
+        maxLen = len;
+        descIndex = index;
       }
     });
+
+    // If description wasn't explicitly found by header name (which we didn't check deep), use the longest column
+    if (descIndex !== -1 && !newMappings[descIndex]) {
+      newMappings[descIndex] = 'description';
+    }
+
+    // Fill rest as skip
+    dataRow.forEach((_, index) => {
+      if (!newMappings[index]) newMappings[index] = 'skip';
+    });
+
     setMappings(newMappings);
   };
 
@@ -101,6 +146,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     if (isNaN(date.getTime())) {
       const parts = val.split(/[.-]/);
       if (parts.length === 3) {
+        // Try DD.MM.YYYY
         date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
       }
     }
@@ -120,9 +166,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     return null;
   };
 
-  // --- Logic to parse and move to GROUP step ---
   const handleParseAndAnalyze = () => {
-    // Use the file stored in state
     if (!importedFile) return;
 
     Papa.parse(importedFile, {
@@ -136,7 +180,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
           const row = rows[i];
           let date = new Date().toISOString();
           let amount = 0;
-          let description = 'Importowana transakcja';
+          let description = ''; // Do NOT set a default "Importowana transakcja" here.
           let category = Category.OTHER;
           let categoryFoundInCsv = false;
 
@@ -158,6 +202,11 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
             }
           });
 
+          // Fallback if description is empty: try to find any unmapped text column or set generic
+          if (!description) {
+             description = 'Bez opisu'; 
+          }
+
           if (amount !== 0) {
             let finalCategory: string | Category = category;
             
@@ -174,7 +223,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
               id: crypto.randomUUID(),
               date,
               amount: Math.abs(amount),
-              description: description || 'Bez opisu',
+              description: description,
               type: amount > 0 ? TransactionType.INCOME : TransactionType.EXPENSE,
               category: finalCategory
             });
@@ -196,21 +245,34 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     });
   };
 
-  // --- Grouping Algorithm ---
   const analyzeGroups = (transactions: Transaction[]): GroupedTransaction[] => {
     const groups: Record<string, { ids: string[], example: string, count: number }> = {};
 
     transactions.forEach(t => {
-      // Only group expenses that are currently uncategorized (OTHER)
-      if (t.type === TransactionType.EXPENSE && t.category === Category.OTHER) {
-        const cleanDesc = t.description
-          .toLowerCase()
-          .replace(/[0-9]/g, '') // remove numbers
-          .replace(/[^\w\s\u00C0-\u017F]/g, '') // remove special chars but keep polish letters
-          .trim();
+      // Only group expenses that are currently uncategorized (OTHER) and have a valid description
+      if (t.type === TransactionType.EXPENSE && t.category === Category.OTHER && t.description !== 'Bez opisu') {
+        // 1. Normalize
+        let cleanDesc = t.description.toLowerCase();
         
-        const signature = cleanDesc.split(/\s+/).slice(0, 3).join(' ');
+        // 2. Replace special chars (except underscore/digits) with spaces
+        cleanDesc = cleanDesc.replace(/[^\w\s\u00C0-\u017F]/g, ' '); 
         
+        // 3. Tokenize
+        const tokens = cleanDesc.split(/\s+/).filter(Boolean);
+        
+        // 4. Skip common prefixes
+        let startIndex = 0;
+        // Skip prefix if it's in the ignored list OR if it's a short number/digit
+        while(startIndex < tokens.length && (IGNORED_PREFIXES.includes(tokens[startIndex]) || /^\d+$/.test(tokens[startIndex]))) {
+            startIndex++;
+        }
+
+        // 5. Take the next 2 relevant words as signature
+        const relevantTokens = tokens.slice(startIndex, startIndex + 2);
+        
+        const signature = relevantTokens.join(' ');
+        
+        // If signature is too short (e.g. just 1 letter) or empty, skip grouping
         if (signature.length < 3) return; 
 
         if (!groups[signature]) {
@@ -235,7 +297,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   };
 
   const handleUpdateGroupCategory = (signature: string, newCategory: string) => {
-    // Only update the group definition, do not touch pendingTransactions yet
     setDetectedGroups(prev => prev.map(g => 
       g.signature === signature ? { ...g, currentCategory: newCategory } : g
     ));
@@ -248,7 +309,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   };
 
   const handleFinalImport = () => {
-    // Apply group categories to transactions
     const finalTransactions = pendingTransactions.map(t => {
       const group = detectedGroups.find(g => g.ids.includes(t.id));
       if (group && group.enabled) {
@@ -288,10 +348,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
               <h2 className="text-lg font-bold text-slate-800">
                 {step === 'UPLOAD' && 'Importuj transakcje'}
                 {step === 'MAP' && 'Dopasuj kolumny'}
-                {step === 'GROUP' && 'Grupowa kategoryzacja'}
+                {step === 'GROUP' && 'Wykryte grupy transakcji'}
               </h2>
               {step === 'GROUP' && (
-                <p className="text-xs text-slate-400 font-normal">Zaznacz grupy, którym chcesz nadać wspólną kategorię.</p>
+                <p className="text-xs text-slate-400 font-normal">Aplikacja zgrupowała podobne opisy. Nadaj im kategorię masowo.</p>
               )}
             </div>
           </div>
@@ -422,10 +482,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                   <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                     <tr>
                       <th className="px-4 py-3 text-center w-12">
-                        {/* Checkbox Column */}
+                        {/* Checkbox */}
                       </th>
-                      <th className="px-4 py-3">Wykryta grupa (Wspólny opis)</th>
-                      <th className="px-4 py-3 text-center">Liczba transakcji</th>
+                      <th className="px-4 py-3">Opis transakcji (Przykład)</th>
+                      <th className="px-4 py-3 text-center">Ilość</th>
                       <th className="px-4 py-3">Przypisz kategorię</th>
                     </tr>
                   </thead>
@@ -441,11 +501,11 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                           />
                         </td>
                         <td className="px-4 py-4">
-                          <div className={`font-medium capitalize ${group.enabled ? 'text-slate-800' : 'text-slate-500'}`}>
-                            {group.signature}
+                          <div className={`font-semibold ${group.enabled ? 'text-slate-800' : 'text-slate-500'}`}>
+                            {group.example}
                           </div>
-                          <div className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">
-                            np. {group.example}
+                          <div className="text-xs text-slate-400 mt-1">
+                            Wykryta grupa (prefiks): <span className="font-mono bg-slate-100 px-1 rounded">{group.signature}</span>
                           </div>
                         </td>
                         <td className="px-4 py-4 text-center">
@@ -475,7 +535,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                 </table>
               </div>
               <p className="text-xs text-slate-400 text-center">
-                Zaznaczone grupy zostaną zaktualizowane. Odznaczone pozostaną w kategorii "Inne".
+                Odznacz grupy, których nie chcesz zmieniać (zostaną jako "Inne").
               </p>
             </div>
           )}

@@ -128,7 +128,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none"
               >
-                {Object.values(Category).filter(c => c !== Category.SALARY && c !== Category.INVESTMENTS).map((cat) => (
+                {Object.values(Category).filter(c => c !== Category.SALARY).map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>

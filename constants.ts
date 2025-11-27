@@ -9,6 +9,8 @@ export const CATEGORY_COLORS: Record<string, string> = {
   [Category.HEALTH]: '#ec4899', // Pink-500
   [Category.SALARY]: '#22c55e', // Green-500
   [Category.INVESTMENTS]: '#06b6d4', // Cyan-500
+  [Category.CREDIT]: '#9f1239', // Rose-800
+  [Category.INTERNAL_TRANSFER]: '#0d9488', // Teal-600
   [Category.OTHER]: '#64748b', // Slate-500
 };
 
@@ -33,7 +35,7 @@ export const KEYWORD_CATEGORY_MAP: Record<string, Category> = {
   'uber eats': Category.FOOD,
   'stokrotka': Category.FOOD,
 
-  // Zakupy (Nowa kategoria)
+  // Zakupy
   'allegro': Category.SHOPPING,
   'amazon': Category.SHOPPING,
   'zalando': Category.SHOPPING,
@@ -54,11 +56,11 @@ export const KEYWORD_CATEGORY_MAP: Record<string, Category> = {
   'action': Category.SHOPPING,
   'dealz': Category.SHOPPING,
   'smyk': Category.SHOPPING,
-  'empik': Category.SHOPPING, // Can be overlap with entertainment, but shopping is safe
+  'empik': Category.SHOPPING,
 
   // Transport
   'orlen': Category.TRANSPORT,
-  'bp ': Category.TRANSPORT, // space to avoid matching partial words sometimes
+  'bp ': Category.TRANSPORT,
   'shell': Category.TRANSPORT,
   'circle k': Category.TRANSPORT,
   'moya': Category.TRANSPORT,
@@ -124,8 +126,15 @@ export const KEYWORD_CATEGORY_MAP: Record<string, Category> = {
   'lekarz': Category.HEALTH,
   'przychodnia': Category.HEALTH,
   'badania': Category.HEALTH,
-  'rossmann': Category.HEALTH, // Often cosmetics/hygiene fits here or 'Inne', user preference
+  'rossmann': Category.HEALTH,
   'hebe': Category.HEALTH,
+
+  // Kredyt
+  'rata': Category.CREDIT,
+  'kredyt': Category.CREDIT,
+  'hipoteka': Category.CREDIT,
+  'odsetki': Category.CREDIT,
+  'bank': Category.CREDIT, // Context dependent, but often loan related in desc like 'splata bank'
 
   // Inwestycje
   'xtb': Category.INVESTMENTS,
@@ -136,6 +145,14 @@ export const KEYWORD_CATEGORY_MAP: Record<string, Category> = {
   'ppk': Category.INVESTMENTS,
   'ike': Category.INVESTMENTS,
   'ikze': Category.INVESTMENTS,
+
+  // Przelew Własny
+  'przelew własny': Category.INTERNAL_TRANSFER,
+  'oszczędności': Category.INTERNAL_TRANSFER,
+  'lokata': Category.INTERNAL_TRANSFER,
+  'konto oszczędnościowe': Category.INTERNAL_TRANSFER,
+  'sejf': Category.INTERNAL_TRANSFER,
+  'skarbonka': Category.INTERNAL_TRANSFER,
 };
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [
@@ -147,36 +164,44 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
   { id: 't5', amount: 9200.00, description: 'Wynagrodzenie Listopad', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-11-10T09:00:00.000Z' },
   { id: 't6', amount: 2800.00, description: 'Czynsz i opłaty', type: TransactionType.EXPENSE, category: Category.HOUSING, date: '2025-11-05T10:00:00.000Z' },
   { id: 't_shop1', amount: 249.99, description: 'Nowe buty Zalando', type: TransactionType.EXPENSE, category: Category.SHOPPING, date: '2025-11-02T16:20:00.000Z' },
+  { id: 't_cred1', amount: 1800.00, description: 'Rata kredytu hipotecznego', type: TransactionType.EXPENSE, category: Category.CREDIT, date: '2025-11-11T09:00:00.000Z' },
+  { id: 't_save1', amount: 1000.00, description: 'Przelew na oszczędnościowe', type: TransactionType.EXPENSE, category: Category.INTERNAL_TRANSFER, date: '2025-11-12T10:00:00.000Z' },
 
   // Październik 2025
   { id: 't7', amount: 320.00, description: 'Wizyta u stomatologa', type: TransactionType.EXPENSE, category: Category.HEALTH, date: '2025-10-28T11:30:00.000Z' },
   { id: 't8', amount: 215.80, description: 'Kolacja rocznicowa', type: TransactionType.EXPENSE, category: Category.FOOD, date: '2025-10-20T20:00:00.000Z' },
   { id: 't9', amount: 9200.00, description: 'Wynagrodzenie Październik', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-10-10T09:00:00.000Z' },
   { id: 't10', amount: 120.00, description: 'Karnet na siłownię', type: TransactionType.EXPENSE, category: Category.HEALTH, date: '2025-10-02T16:00:00.000Z' },
+  { id: 't_cred2', amount: 1800.00, description: 'Rata kredytu hipotecznego', type: TransactionType.EXPENSE, category: Category.CREDIT, date: '2025-10-11T09:00:00.000Z' },
 
   // Wrzesień 2025
   { id: 't11', amount: 500.00, description: 'Naprawa samochodu', type: TransactionType.EXPENSE, category: Category.TRANSPORT, date: '2025-09-25T14:00:00.000Z' },
   { id: 't12', amount: 9200.00, description: 'Wynagrodzenie Wrzesień', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-09-10T09:00:00.000Z' },
   { id: 't13', amount: 1500.00, description: 'Zakup obligacji skarbowych', type: TransactionType.EXPENSE, category: Category.INVESTMENTS, date: '2025-09-05T12:00:00.000Z' },
+  { id: 't_cred3', amount: 1800.00, description: 'Rata kredytu hipotecznego', type: TransactionType.EXPENSE, category: Category.CREDIT, date: '2025-09-11T09:00:00.000Z' },
 
   // Sierpień 2025
   { id: 't14', amount: 2400.00, description: 'Wyjazd wakacyjny (hotel)', type: TransactionType.EXPENSE, category: Category.ENTERTAINMENT, date: '2025-08-15T14:00:00.000Z' },
   { id: 't15', amount: 9200.00, description: 'Wynagrodzenie Sierpień', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-08-10T09:00:00.000Z' },
   { id: 't16', amount: 450.00, description: 'Bilety PKP (wakacje)', type: TransactionType.EXPENSE, category: Category.TRANSPORT, date: '2025-08-01T08:00:00.000Z' },
+  { id: 't_cred4', amount: 1800.00, description: 'Rata kredytu hipotecznego', type: TransactionType.EXPENSE, category: Category.CREDIT, date: '2025-08-11T09:00:00.000Z' },
 
   // Lipiec 2025
   { id: 't17', amount: 200.00, description: 'Prezent urodzinowy mamy', type: TransactionType.EXPENSE, category: Category.OTHER, date: '2025-07-20T18:00:00.000Z' },
   { id: 't18', amount: 9000.00, description: 'Wynagrodzenie Lipiec', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-07-10T09:00:00.000Z' },
   { id: 't19', amount: 350.00, description: 'Zakupy odzieżowe H&M', type: TransactionType.EXPENSE, category: Category.SHOPPING, date: '2025-07-05T17:30:00.000Z' },
+  { id: 't_cred5', amount: 1800.00, description: 'Rata kredytu hipotecznego', type: TransactionType.EXPENSE, category: Category.CREDIT, date: '2025-07-11T09:00:00.000Z' },
 
   // Czerwiec 2025
   { id: 't20', amount: 180.00, description: 'Subskrypcje roczne (Spotify)', type: TransactionType.EXPENSE, category: Category.ENTERTAINMENT, date: '2025-06-15T10:00:00.000Z' },
   { id: 't21', amount: 9000.00, description: 'Wynagrodzenie Czerwiec', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-06-10T09:00:00.000Z' },
   { id: 't22', amount: 2800.00, description: 'Czynsz i opłaty', type: TransactionType.EXPENSE, category: Category.HOUSING, date: '2025-06-05T10:00:00.000Z' },
+  { id: 't_cred6', amount: 1800.00, description: 'Rata kredytu hipotecznego', type: TransactionType.EXPENSE, category: Category.CREDIT, date: '2025-06-11T09:00:00.000Z' },
 
   // Maj 2025
   { id: 't23', amount: 145.00, description: 'Pizza ze znajomymi', type: TransactionType.EXPENSE, category: Category.FOOD, date: '2025-05-28T20:30:00.000Z' },
-  { id: 't24', amount: 9000.00, description: 'Wynagrodzenie Maj', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-05-27T09:00:00.000Z' }
+  { id: 't24', amount: 9000.00, description: 'Wynagrodzenie Maj', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-05-27T09:00:00.000Z' },
+  { id: 't_cred7', amount: 1800.00, description: 'Rata kredytu hipotecznego', type: TransactionType.EXPENSE, category: Category.CREDIT, date: '2025-05-11T09:00:00.000Z' }
 ];
 
 export const CURRENCY_FORMATTER = new Intl.NumberFormat('pl-PL', {

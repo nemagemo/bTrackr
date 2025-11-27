@@ -55,10 +55,9 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   };
 
   const handleDelete = () => {
-    if (confirm('Czy na pewno chcesz usunąć tę transakcję?')) {
-      onDelete(transaction.id);
-      onClose();
-    }
+    onDelete(transaction.id);
+    // Don't close here immediately, let the confirm modal logic in parent decide flow or parent closes this.
+    // In current implementation, parent opens confirm modal on top.
   };
 
   return (

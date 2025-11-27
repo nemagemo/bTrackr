@@ -11,7 +11,7 @@ import {
   Area,
 } from 'recharts';
 import { Filter, History, AlertCircle } from 'lucide-react';
-import { Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType, Category } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 import { SankeyDiagram } from './SankeyDiagram';
 
@@ -81,18 +81,51 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions }) => {
       if (t.type === TransactionType.INCOME) {
         acc[key].income += t.amount;
       } else {
-        acc[key].expense += t.amount;
+        // Only count 'real' expenses (not internal transfers) for the Expense Bar
+        if (t.category !== Category.INTERNAL_TRANSFER) {
+           acc[key].expense += t.amount;
+        }
+        // Balance always subtracts everything that left the wallet, including transfers?
+        // Actually, if we view Balance as "Available to Spend", then yes.
+        // But if we view it as "Net Worth Change" (ignoring transfer), it differs.
+        // Let's keep the chart showing Balance = Income - All Outflows
+        // BUT, the Expense BAR will be lower.
+        // This might look confusing if Balance != Income - Expense Bar.
+        // Let's stick to consistency:
+        // Expense Bar = Consumer Expenses.
+        // Balance Line = Income - Consumer Expenses - Transfers.
+        // We will calculate Balance fully.
+        const outflow = t.amount; 
+        // We accumulate balance change separately
+        // Wait, for the Area Chart "Trend Oszczędności", usually it's accumulating surplus.
+        // If I transfer to savings, my "Wallet Balance" drops, but "Total Savings" goes up.
+        // Let's assume this chart tracks "Wallet Balance".
       }
       
       return acc;
     }, {} as Record<string, any>);
 
+    // Second pass to calculate balance correctly per bucket
+    // We need to loop again or handle full balance logic
+    // Simplified: Just use the accumulations above.
+    
+    // Actually, to make the chart consistent: Balance = Income - (Expenses + Transfers)
+    // But Expense Bar = Expenses (without Transfers).
+    // This is fine.
+    
+    // We need to re-calculate balance for each bucket because the loop above skips transfers for 'expense' prop
+    Object.keys(grouped).forEach(key => {
+        const bucketTxs = filteredTransactions.filter(t => {
+             const d = new Date(t.date);
+             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === key;
+        });
+        const inc = bucketTxs.filter(t => t.type === TransactionType.INCOME).reduce((s, t) => s + t.amount, 0);
+        const out = bucketTxs.filter(t => t.type === TransactionType.EXPENSE).reduce((s, t) => s + t.amount, 0);
+        grouped[key].balance = inc - out;
+    });
+
     return Object.values(grouped)
-      .sort((a: any, b: any) => a.date.localeCompare(b.date))
-      .map((item: any) => ({
-        ...item,
-        balance: item.income - item.expense
-      }));
+      .sort((a: any, b: any) => a.date.localeCompare(b.date));
   }, [filteredTransactions]);
 
   // --- Statistics Calculation ---
@@ -101,14 +134,23 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions }) => {
       .filter(t => t.type === TransactionType.INCOME)
       .reduce((sum, t) => sum + t.amount, 0);
       
+    // "Wydatki" statistic - Exclude transfers
     const totalExpense = filteredTransactions
-      .filter(t => t.type === TransactionType.EXPENSE)
+      .filter(t => t.type === TransactionType.EXPENSE && t.category !== Category.INTERNAL_TRANSFER)
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const totalTransfers = filteredTransactions
+      .filter(t => t.type === TransactionType.EXPENSE && t.category === Category.INTERNAL_TRANSFER)
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const balance = totalIncome - totalExpense;
+    // "Oszczędności" = Income - ConsumerExpenses (Money not spent on consumption)
+    // This includes money left in account + money transferred to savings
+    const balance = totalIncome - totalExpense; 
+    
+    // Savings Rate
     const savingsRate = totalIncome > 0 ? (balance / totalIncome) * 100 : 0;
 
-    return { totalIncome, totalExpense, balance, savingsRate };
+    return { totalIncome, totalExpense, balance, savingsRate, totalTransfers };
   }, [filteredTransactions]);
 
   if (transactions.length === 0) {
@@ -214,13 +256,16 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions }) => {
           <p className="text-lg font-bold text-green-600 mt-1">{CURRENCY_FORMATTER.format(stats.totalIncome)}</p>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Wydatki</p>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Wydatki (Konsumpcja)</p>
           <p className="text-lg font-bold text-red-500 mt-1">{CURRENCY_FORMATTER.format(stats.totalExpense)}</p>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Oszczędności</p>
           <p className={`text-lg font-bold mt-1 ${stats.balance >= 0 ? 'text-indigo-600' : 'text-orange-500'}`}>
             {CURRENCY_FORMATTER.format(stats.balance)}
+          </p>
+          <p className="text-[10px] text-slate-400 mt-1">
+             (w tym {CURRENCY_FORMATTER.format(stats.totalTransfers)} przelewów)
           </p>
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
@@ -313,8 +358,8 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions }) => {
 
         {/* Trend Oszczędności */}
         <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100">
-          <h3 className="font-semibold text-slate-800 mb-2">Trend Oszczędności</h3>
-          <p className="text-xs text-slate-400 mb-6">Zmiana salda w czasie (dla wybranego okresu)</p>
+          <h3 className="font-semibold text-slate-800 mb-2">Trend Salda</h3>
+          <p className="text-xs text-slate-400 mb-6">Zmiana salda portfela w czasie (uwzględnia wszystkie wypływy)</p>
           {monthlyData.length > 0 ? (
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">

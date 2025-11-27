@@ -10,8 +10,10 @@ export enum Category {
   HOUSING = 'Mieszkanie',
   ENTERTAINMENT = 'Rozrywka',
   HEALTH = 'Zdrowie',
+  CREDIT = 'Kredyt',
   SALARY = 'Wynagrodzenie',
   INVESTMENTS = 'Inwestycje',
+  INTERNAL_TRANSFER = 'Przelew własny',
   OTHER = 'Inne'
 }
 

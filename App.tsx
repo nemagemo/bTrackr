@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Wallet, PieChart as PieChartIcon, ArrowDownCircle, ArrowUpCircle, Sparkles, LayoutDashboard, LineChart, History } from 'lucide-react';
-import { Transaction, TransactionType } from './types';
+import { Transaction, TransactionType, Category } from './types';
 import { INITIAL_TRANSACTIONS, CURRENCY_FORMATTER } from './constants';
 import { StatCard } from './components/StatCard';
 import { TransactionForm } from './components/TransactionForm';
@@ -10,6 +10,7 @@ import { AnalysisView } from './components/AnalysisView';
 import { HistoryView } from './components/HistoryView';
 import { ImportModal } from './components/ImportModal';
 import { EditTransactionModal } from './components/EditTransactionModal';
+import { ConfirmModal } from './components/ConfirmModal';
 import { getFinancialAdvice } from './services/geminiService';
 
 type Tab = 'dashboard' | 'analysis' | 'history';
@@ -28,6 +29,19 @@ const App: React.FC = () => {
   // Edit Modal State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
+  // Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    action: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    action: () => {},
+  });
+
   useEffect(() => {
     localStorage.setItem('zenbudget_transactions', JSON.stringify(transactions));
   }, [transactions]);
@@ -38,15 +52,21 @@ const App: React.FC = () => {
         if (t.type === TransactionType.INCOME) {
           acc.totalIncome += t.amount;
         } else {
-          acc.totalExpense += t.amount;
+          // If it is internal transfer, we don't count it as "Consumer Expense" for the stats
+          // but we track it as outflow for balance calculation
+          if (t.category !== Category.INTERNAL_TRANSFER) {
+            acc.totalExpense += t.amount;
+          }
+          acc.totalOutflow += t.amount;
         }
         return acc;
       },
-      { totalIncome: 0, totalExpense: 0 }
+      { totalIncome: 0, totalExpense: 0, totalOutflow: 0 }
     );
   }, [transactions]);
 
-  const balance = summary.totalIncome - summary.totalExpense;
+  // Balance = Income - All Outflows (including transfers to savings)
+  const balance = summary.totalIncome - summary.totalOutflow;
 
   const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
     const transaction: Transaction = {
@@ -64,15 +84,37 @@ const App: React.FC = () => {
     setTransactions((prev) => [...importedTxs, ...prev]);
   };
 
-  const handleDeleteTransaction = (id: string) => {
+  // Internal implementation that actually removes data
+  const performDeleteTransaction = (id: string) => {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
+    if (editingTransaction?.id === id) {
+      setEditingTransaction(null);
+    }
   };
 
-  const handleClearAllTransactions = () => {
-    if (confirm('UWAGA: Czy na pewno chcesz trwale usunąć WSZYSTKIE transakcje? Tej operacji nie można cofnąć.')) {
-      setTransactions([]);
-      localStorage.removeItem('zenbudget_transactions');
-    }
+  const performClearAll = () => {
+    setTransactions([]);
+    localStorage.removeItem('zenbudget_transactions');
+    setEditingTransaction(null);
+  };
+
+  // Request handlers that open the confirmation modal
+  const requestDeleteTransaction = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Usuń transakcję',
+      message: 'Czy na pewno chcesz usunąć tę transakcję? Tej operacji nie można cofnąć.',
+      action: () => performDeleteTransaction(id),
+    });
+  };
+
+  const requestClearAllTransactions = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Wyczyść historię',
+      message: 'UWAGA: Czy na pewno chcesz trwale usunąć WSZYSTKIE transakcje? Tej operacji nie można cofnąć.',
+      action: () => performClearAll(),
+    });
   };
 
   const handleGetAdvice = async () => {
@@ -210,7 +252,7 @@ const App: React.FC = () => {
                       Zobacz wszystkie
                     </button>
                   </div>
-                  <TransactionList transactions={transactions.slice(0, 5)} onDelete={handleDeleteTransaction} />
+                  <TransactionList transactions={transactions.slice(0, 5)} onDelete={requestDeleteTransaction} />
                 </div>
               </div>
 
@@ -225,10 +267,10 @@ const App: React.FC = () => {
                   </div>
                   <ExpenseChart transactions={transactions} />
                   <div className="mt-4 grid grid-cols-2 gap-2">
-                    {/* Minimal Legend */}
+                    {/* Minimal Legend - Exclude Internal Transfer from this view? Usually yes */}
                     {Object.entries(
                       transactions
-                        .filter(t => t.type === TransactionType.EXPENSE)
+                        .filter(t => t.type === TransactionType.EXPENSE && t.category !== Category.INTERNAL_TRANSFER)
                         .reduce((acc, t) => {
                           acc[t.category] = (acc[t.category] || 0) + t.amount;
                           return acc;
@@ -257,8 +299,8 @@ const App: React.FC = () => {
           <HistoryView 
             transactions={transactions} 
             onEdit={setEditingTransaction} 
-            onDelete={handleDeleteTransaction} 
-            onClearAll={handleClearAllTransactions}
+            onDelete={requestDeleteTransaction} 
+            onClearAll={requestClearAllTransactions}
           />
         )}
       </main>
@@ -275,7 +317,18 @@ const App: React.FC = () => {
         transaction={editingTransaction}
         onClose={() => setEditingTransaction(null)}
         onSave={handleUpdateTransaction}
-        onDelete={handleDeleteTransaction}
+        onDelete={requestDeleteTransaction}
+      />
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={() => {
+          confirmModal.action();
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }}
+        title={confirmModal.title}
+        message={confirmModal.message}
       />
     </div>
   );

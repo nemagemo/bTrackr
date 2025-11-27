@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ResponsiveContainer, Sankey, Tooltip, Layer, Rectangle } from 'recharts';
-import { Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType, Category } from '../types';
 import { CATEGORY_COLORS, CURRENCY_FORMATTER } from '../constants';
 
 interface SankeyDiagramProps {
@@ -13,35 +13,47 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions }) =>
     const incomeMap: Record<string, number> = {};
     const expenseMap: Record<string, number> = {};
     let totalIncome = 0;
-    let totalExpense = 0;
+    let totalExpense = 0; // Consumption
+    let totalTransfer = 0; // Savings Transfer
 
     transactions.forEach(t => {
       if (t.type === TransactionType.INCOME) {
         incomeMap[t.category] = (incomeMap[t.category] || 0) + t.amount;
         totalIncome += t.amount;
       } else {
+        // We separate Consumer Expenses from Internal Transfers for the sake of the diagram structure
+        // But in the node list, we can just treat them as categories, the color will distinguish them.
+        // However, let's track totals.
         expenseMap[t.category] = (expenseMap[t.category] || 0) + t.amount;
-        totalExpense += t.amount;
+        
+        if (t.category === Category.INTERNAL_TRANSFER) {
+          totalTransfer += t.amount;
+        } else {
+          totalExpense += t.amount;
+        }
       }
     });
 
-    if (totalIncome === 0 && totalExpense === 0) return { data: { nodes: [], links: [] }, totalVolume: 0 };
+    if (totalIncome === 0 && (totalExpense + totalTransfer) === 0) return { data: { nodes: [], links: [] }, totalVolume: 0 };
 
-    const savings = totalIncome - totalExpense;
+    // Savings = Income - (Expenses + Transfers). This is the "Unallocated Cash".
+    const savings = totalIncome - (totalExpense + totalTransfer);
     const hasSavings = savings > 0;
-    // We use totalIncome as the base for percentages unless it's 0 (unlikely in this logic), then we use expense sum
-    const volume = totalIncome > 0 ? totalIncome : totalExpense;
+    
+    const volume = totalIncome > 0 ? totalIncome : (totalExpense + totalTransfer);
 
     // 2. Build Nodes with Colors
-    // Order matters for layout: Income -> Budget -> Expenses/Savings
+    // Order matters for layout: Income -> Budget -> Expenses/Transfers/Savings
     const incomeCategories = Object.keys(incomeMap).sort();
+    
+    // Sort expenses by value
     const expenseCategories = Object.keys(expenseMap).sort((a, b) => expenseMap[b] - expenseMap[a]);
 
     const nodes = [
       ...incomeCategories.map(name => ({ name, fill: '#22c55e', value: incomeMap[name] })), // Green for Income
       { name: 'Budżet', fill: '#0f172a', value: volume }, // Dark Slate for Budget
       ...expenseCategories.map(name => ({ name, fill: CATEGORY_COLORS[name] || '#94a3b8', value: expenseMap[name] })),
-      ...(hasSavings ? [{ name: 'Oszczędności', fill: '#6366f1', value: savings }] : []) // Indigo for Savings
+      ...(hasSavings ? [{ name: 'Nieprzypisane', fill: '#a5b4fc', value: savings }] : []) // Light Indigo for remaining balance
     ];
 
     const getNodeIndex = (name: string) => nodes.findIndex(n => n.name === name);
@@ -59,7 +71,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions }) =>
       });
     });
 
-    // Wallet -> Expenses
+    // Wallet -> Expenses (and Transfers)
     expenseCategories.forEach(cat => {
       links.push({
         source: walletIndex,
@@ -68,11 +80,11 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions }) =>
       });
     });
 
-    // Wallet -> Savings
+    // Wallet -> Unallocated Savings
     if (hasSavings) {
       links.push({
         source: walletIndex,
-        target: getNodeIndex('Oszczędności'),
+        target: getNodeIndex('Nieprzypisane'),
         value: savings
       });
     }
@@ -95,7 +107,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions }) =>
     const isOut = x + width + 6 > containerWidth / 2;
     
     // Calculate percentage relative to total volume
-    // Note: Recharts Sankey sometimes passes value directly, but we want to be sure relative to TOTAL budget
     const percent = totalVolume > 0 ? ((payload.value / totalVolume) * 100).toFixed(1) : '0';
 
     return (
@@ -128,7 +139,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions }) =>
           fontSize={11}
           fill="#64748b"
         >
-          {/* Always show value + percent */}
           {`${CURRENCY_FORMATTER.format(payload.value)} (${percent}%)`}
         </text>
       </Layer>
