@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, TrendingUp, TrendingDown, Edit2, Trash2, Ban } from 'lucide-react';
+import { Search, Filter, TrendingUp, TrendingDown, Edit2, Trash2, Ban, ListChecks } from 'lucide-react';
 import { Transaction, TransactionType, Category } from '../types';
 import { CATEGORY_COLORS, CURRENCY_FORMATTER } from '../constants';
 
@@ -8,9 +8,10 @@ interface HistoryViewProps {
   onEdit: (transaction: Transaction) => void;
   onDelete: (id: string) => void;
   onClearAll: () => void;
+  onOpenBulkAction?: () => void;
 }
 
-export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, onEdit, onDelete, onClearAll }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, onEdit, onDelete, onClearAll, onOpenBulkAction }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -80,6 +81,18 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, onEdit, 
           {transactions.length > 0 && (
             <>
               <div className="w-px h-8 bg-slate-200 mx-1 hidden md:block"></div>
+              
+              {onOpenBulkAction && (
+                <button
+                  onClick={onOpenBulkAction}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100"
+                  title="Grupowa kategoryzacja"
+                >
+                  <ListChecks size={14} />
+                  <span className="hidden lg:inline">Kategoryzacja</span>
+                </button>
+              )}
+
               <button
                 onClick={onClearAll}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"

@@ -11,6 +11,7 @@ import { HistoryView } from './components/HistoryView';
 import { ImportModal } from './components/ImportModal';
 import { EditTransactionModal } from './components/EditTransactionModal';
 import { ConfirmModal } from './components/ConfirmModal';
+import { BulkCategoryModal } from './components/BulkCategoryModal';
 import { getFinancialAdvice } from './services/geminiService';
 
 type Tab = 'dashboard' | 'analysis' | 'history';
@@ -25,6 +26,7 @@ const App: React.FC = () => {
   const [aiAdvice, setAiAdvice] = useState<string>('');
   const [isLoadingAdvice, setIsLoadingAdvice] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   
   // Edit Modal State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -78,6 +80,12 @@ const App: React.FC = () => {
 
   const handleUpdateTransaction = (updatedTx: Transaction) => {
     setTransactions((prev) => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+  };
+
+  const handleBulkCategoryUpdate = (ids: string[], newCategory: string) => {
+    setTransactions(prev => prev.map(t => 
+      ids.includes(t.id) ? { ...t, category: newCategory } : t
+    ));
   };
 
   const handleImportTransactions = (importedTxs: Transaction[]) => {
@@ -301,6 +309,7 @@ const App: React.FC = () => {
             onEdit={setEditingTransaction} 
             onDelete={requestDeleteTransaction} 
             onClearAll={requestClearAllTransactions}
+            onOpenBulkAction={() => setIsBulkModalOpen(true)}
           />
         )}
       </main>
@@ -318,6 +327,13 @@ const App: React.FC = () => {
         onClose={() => setEditingTransaction(null)}
         onSave={handleUpdateTransaction}
         onDelete={requestDeleteTransaction}
+      />
+
+      <BulkCategoryModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        transactions={transactions}
+        onUpdate={handleBulkCategoryUpdate}
       />
 
       <ConfirmModal 

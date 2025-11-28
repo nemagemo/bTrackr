@@ -5,6 +5,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   [Category.SHOPPING]: '#3b82f6', // Blue-500
   [Category.TRANSPORT]: '#f97316', // Orange-500
   [Category.HOUSING]: '#eab308', // Yellow-500
+  [Category.BILLS]: '#0ea5e9', // Sky-500 (New color for Bills)
   [Category.ENTERTAINMENT]: '#8b5cf6', // Violet-500
   [Category.HEALTH]: '#ec4899', // Pink-500
   [Category.SALARY]: '#22c55e', // Green-500
@@ -92,27 +93,32 @@ export const KEYWORD_CATEGORY_MAP: Record<string, Category> = {
   'bilet': Category.ENTERTAINMENT,
   'eventim': Category.ENTERTAINMENT,
 
-  // Mieszkanie / Media
+  // Mieszkanie (Czynsz, Remonty, Wyposażenie)
   'czynsz': Category.HOUSING,
   'wspólnota': Category.HOUSING,
   'spółdzielnia': Category.HOUSING,
-  'tauron': Category.HOUSING,
-  'pge': Category.HOUSING,
-  'enea': Category.HOUSING,
-  'innogy': Category.HOUSING,
-  'pgnig': Category.HOUSING,
-  'gaz': Category.HOUSING,
-  'vectra': Category.HOUSING,
-  'upc': Category.HOUSING,
-  'netia': Category.HOUSING,
-  'orange': Category.HOUSING,
-  't-mobile': Category.HOUSING,
-  'plus': Category.HOUSING,
-  'play': Category.HOUSING,
   'ikea': Category.HOUSING,
   'castorama': Category.HOUSING,
   'leroy': Category.HOUSING,
   'obi': Category.HOUSING,
+
+  // Opłaty (Media, Telekomunikacja)
+  'tauron': Category.BILLS,
+  'pge': Category.BILLS,
+  'enea': Category.BILLS,
+  'innogy': Category.BILLS,
+  'pgnig': Category.BILLS,
+  'gaz': Category.BILLS,
+  'vectra': Category.BILLS,
+  'upc': Category.BILLS,
+  'netia': Category.BILLS,
+  'orange': Category.BILLS,
+  't-mobile': Category.BILLS,
+  'plus': Category.BILLS,
+  'play': Category.BILLS,
+  'ubezpieczenie': Category.BILLS,
+  'pzu': Category.BILLS,
+  'warta': Category.BILLS,
 
   // Zdrowie
   'apteka': Category.HEALTH,
@@ -134,7 +140,7 @@ export const KEYWORD_CATEGORY_MAP: Record<string, Category> = {
   'kredyt': Category.CREDIT,
   'hipoteka': Category.CREDIT,
   'odsetki': Category.CREDIT,
-  'bank': Category.CREDIT, // Context dependent, but often loan related in desc like 'splata bank'
+  'bank': Category.CREDIT, 
 
   // Inwestycje
   'xtb': Category.INVESTMENTS,
@@ -162,7 +168,8 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
   { id: 't3', amount: 120.00, description: 'Kino - Diuna 3', type: TransactionType.EXPENSE, category: Category.ENTERTAINMENT, date: '2025-11-20T19:00:00.000Z' },
   { id: 't4', amount: 350.00, description: 'Paliwo Orlen', type: TransactionType.EXPENSE, category: Category.TRANSPORT, date: '2025-11-15T08:45:00.000Z' },
   { id: 't5', amount: 9200.00, description: 'Wynagrodzenie Listopad', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-11-10T09:00:00.000Z' },
-  { id: 't6', amount: 2800.00, description: 'Czynsz i opłaty', type: TransactionType.EXPENSE, category: Category.HOUSING, date: '2025-11-05T10:00:00.000Z' },
+  { id: 't6', amount: 800.00, description: 'Czynsz', type: TransactionType.EXPENSE, category: Category.HOUSING, date: '2025-11-05T10:00:00.000Z' },
+  { id: 't6_bills', amount: 250.00, description: 'Rachunek za prąd Tauron', type: TransactionType.EXPENSE, category: Category.BILLS, date: '2025-11-06T10:00:00.000Z' },
   { id: 't_shop1', amount: 249.99, description: 'Nowe buty Zalando', type: TransactionType.EXPENSE, category: Category.SHOPPING, date: '2025-11-02T16:20:00.000Z' },
   { id: 't_cred1', amount: 1800.00, description: 'Rata kredytu hipotecznego', type: TransactionType.EXPENSE, category: Category.CREDIT, date: '2025-11-11T09:00:00.000Z' },
   { id: 't_save1', amount: 1000.00, description: 'Przelew na oszczędnościowe', type: TransactionType.EXPENSE, category: Category.INTERNAL_TRANSFER, date: '2025-11-12T10:00:00.000Z' },
@@ -173,6 +180,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
   { id: 't9', amount: 9200.00, description: 'Wynagrodzenie Październik', type: TransactionType.INCOME, category: Category.SALARY, date: '2025-10-10T09:00:00.000Z' },
   { id: 't10', amount: 120.00, description: 'Karnet na siłownię', type: TransactionType.EXPENSE, category: Category.HEALTH, date: '2025-10-02T16:00:00.000Z' },
   { id: 't_cred2', amount: 1800.00, description: 'Rata kredytu hipotecznego', type: TransactionType.EXPENSE, category: Category.CREDIT, date: '2025-10-11T09:00:00.000Z' },
+  { id: 't_bills2', amount: 120.00, description: 'Internet UPC', type: TransactionType.EXPENSE, category: Category.BILLS, date: '2025-10-15T09:00:00.000Z' },
 
   // Wrzesień 2025
   { id: 't11', amount: 500.00, description: 'Naprawa samochodu', type: TransactionType.EXPENSE, category: Category.TRANSPORT, date: '2025-09-25T14:00:00.000Z' },

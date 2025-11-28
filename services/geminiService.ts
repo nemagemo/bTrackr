@@ -10,7 +10,7 @@ export const suggestCategory = async (description: string): Promise<string | nul
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Categorize this transaction description into strictly one of these categories (return only the category name in Polish): Jedzenie, Transport, Mieszkanie, Rozrywka, Zdrowie, Zakupy, Kredyt, Inwestycje, Przelew własny, Inne. Description: "${description}"`,
+      contents: `Categorize this transaction description into strictly one of these categories (return only the category name in Polish): Jedzenie, Transport, Mieszkanie, Opłaty, Rozrywka, Zdrowie, Zakupy, Kredyt, Inwestycje, Przelew własny, Inne. Description: "${description}"`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -22,6 +22,7 @@ export const suggestCategory = async (description: string): Promise<string | nul
                 'Jedzenie',
                 'Transport',
                 'Mieszkanie',
+                'Opłaty',
                 'Rozrywka',
                 'Zdrowie',
                 'Zakupy',

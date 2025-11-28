@@ -8,6 +8,7 @@ export enum Category {
   SHOPPING = 'Zakupy',
   TRANSPORT = 'Transport',
   HOUSING = 'Mieszkanie',
+  BILLS = 'Opłaty',
   ENTERTAINMENT = 'Rozrywka',
   HEALTH = 'Zdrowie',
   CREDIT = 'Kredyt',
