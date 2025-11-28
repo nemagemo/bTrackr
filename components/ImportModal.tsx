@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import Papa from 'papaparse';
-import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers, Trash2, FilePlus, AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
 import { Transaction, TransactionType, Category } from '../types';
 import { KEYWORD_CATEGORY_MAP } from '../constants';
@@ -8,11 +8,12 @@ import { KEYWORD_CATEGORY_MAP } from '../constants';
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (transactions: Transaction[]) => void;
+  onImport: (transactions: Transaction[], clearHistory: boolean) => void;
+  hasExistingTransactions: boolean;
 }
 
 type ColumnMapping = 'date' | 'amount' | 'description' | 'category' | 'skip';
-type ImportStep = 'UPLOAD' | 'MAP' | 'GROUP';
+type ImportStep = 'UPLOAD' | 'DECISION' | 'MAP' | 'GROUP';
 
 interface GroupedTransaction {
   signature: string; // The cleaned prefix used for grouping
@@ -31,8 +32,9 @@ const IGNORED_PREFIXES = [
   'zlec', 'zlecenie', 'tytul', 'tytułem', 'numer', 'rachunek', 'faktura', 'vat'
 ];
 
-export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport }) => {
+export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, hasExistingTransactions }) => {
   const [step, setStep] = useState<ImportStep>('UPLOAD');
+  const [importMode, setImportMode] = useState<'APPEND' | 'REPLACE'>('APPEND');
   const [importedFile, setImportedFile] = useState<File | null>(null);
   const [rawFile, setRawFile] = useState<string[][]>([]);
   const [fileName, setFileName] = useState('');
@@ -62,9 +64,15 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       complete: (results) => {
         if (results.data && results.data.length > 0) {
           const rows = results.data as string[][];
-          setRawFile(rows.slice(0, 6)); // Keep first few rows for preview
-          setStep('MAP');
-          guessMappings(rows);
+          const previewRows = rows.slice(0, 6); // Keep first few rows for preview
+          setRawFile(previewRows); 
+          
+          if (hasExistingTransactions) {
+             setStep('DECISION');
+          } else {
+             setStep('MAP');
+             guessMappings(previewRows);
+          }
         } else {
           setError('Plik wydaje się pusty lub uszkodzony.');
         }
@@ -73,6 +81,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
         setError(`Błąd parsowania: ${err.message}`);
       }
     });
+  };
+
+  const handleDecision = (mode: 'APPEND' | 'REPLACE') => {
+    setImportMode(mode);
+    setStep('MAP');
+    // rawFile is already set with preview rows
+    guessMappings(rawFile);
   };
 
   const guessMappings = (rows: string[][]) => {
@@ -180,7 +195,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
           const row = rows[i];
           let date = new Date().toISOString();
           let amount = 0;
-          let description = ''; // Do NOT set a default "Importowana transakcja" here.
+          let description = ''; 
           let category = Category.OTHER;
           let categoryFoundInCsv = false;
 
@@ -202,7 +217,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
             }
           });
 
-          // Fallback if description is empty: try to find any unmapped text column or set generic
+          // Fallback if description is empty
           if (!description) {
              description = 'Bez opisu'; 
           }
@@ -238,7 +253,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
           setDetectedGroups(groups);
           setStep('GROUP');
         } else {
-          onImport(newTransactions);
+          onImport(newTransactions, importMode === 'REPLACE');
           handleClose();
         }
       }
@@ -317,12 +332,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       return t;
     });
 
-    onImport(finalTransactions);
+    onImport(finalTransactions, importMode === 'REPLACE');
     handleClose();
   };
 
   const handleClose = () => {
     setStep('UPLOAD');
+    setImportMode('APPEND');
     setImportedFile(null);
     setRawFile([]);
     setFileName('');
@@ -342,11 +358,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
           <div className="flex items-center gap-2">
             <div className={`p-2 rounded-lg ${step === 'GROUP' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-900'}`}>
-              {step === 'GROUP' ? <Layers size={20} /> : <FileSpreadsheet size={20} />}
+              {step === 'GROUP' ? <Layers size={20} /> : (step === 'DECISION' ? <AlertTriangle size={20}/> : <FileSpreadsheet size={20} />)}
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-800">
                 {step === 'UPLOAD' && 'Importuj transakcje'}
+                {step === 'DECISION' && 'Wykryto istniejące dane'}
                 {step === 'MAP' && 'Dopasuj kolumny'}
                 {step === 'GROUP' && 'Wykryte grupy transakcji'}
               </h2>
@@ -380,6 +397,37 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                   {error}
                 </div>
               )}
+            </div>
+          )}
+
+          {step === 'DECISION' && (
+            <div className="flex flex-col items-center justify-center h-full py-8 text-center space-y-6">
+              <div className="max-w-md mx-auto">
+                 <p className="text-slate-600 mb-6">W aplikacji znajdują się już zapisane transakcje. Co chcesz zrobić z nowymi danymi?</p>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button 
+                      onClick={() => handleDecision('APPEND')}
+                      className="flex flex-col items-center justify-center p-6 bg-white border-2 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 rounded-xl transition-all group"
+                    >
+                      <div className="bg-indigo-100 p-3 rounded-full mb-3 text-indigo-600 group-hover:scale-110 transition-transform">
+                        <FilePlus size={24} />
+                      </div>
+                      <span className="font-bold text-slate-800">Dołącz do obecnych</span>
+                      <span className="text-xs text-slate-400 mt-2">Zachowaj stare i dodaj nowe</span>
+                    </button>
+
+                    <button 
+                       onClick={() => handleDecision('REPLACE')}
+                       className="flex flex-col items-center justify-center p-6 bg-white border-2 border-slate-200 hover:border-red-500 hover:bg-red-50 rounded-xl transition-all group"
+                    >
+                      <div className="bg-red-100 p-3 rounded-full mb-3 text-red-600 group-hover:scale-110 transition-transform">
+                        <Trash2 size={24} />
+                      </div>
+                      <span className="font-bold text-slate-800">Zastąp (Wyczyść stare)</span>
+                      <span className="text-xs text-slate-400 mt-2">Usuń obecne i wgraj nowe</span>
+                    </button>
+                 </div>
+              </div>
             </div>
           )}
 
@@ -547,6 +595,11 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
           
           {step === 'UPLOAD' && (
              <Button disabled className="opacity-0">Dalej</Button>
+          )}
+
+          {step === 'DECISION' && (
+             // No button needed, choices are in the content
+             <span/>
           )}
 
           {step === 'MAP' && (

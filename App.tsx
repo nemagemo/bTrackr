@@ -88,8 +88,12 @@ const App: React.FC = () => {
     ));
   };
 
-  const handleImportTransactions = (importedTxs: Transaction[]) => {
-    setTransactions((prev) => [...importedTxs, ...prev]);
+  const handleImportTransactions = (importedTxs: Transaction[], clearHistory: boolean) => {
+    if (clearHistory) {
+      setTransactions(importedTxs);
+    } else {
+      setTransactions((prev) => [...importedTxs, ...prev]);
+    }
   };
 
   // Internal implementation that actually removes data
@@ -319,6 +323,7 @@ const App: React.FC = () => {
         isOpen={isImportModalOpen} 
         onClose={() => setIsImportModalOpen(false)} 
         onImport={handleImportTransactions}
+        hasExistingTransactions={transactions.length > 0}
       />
       
       <EditTransactionModal 

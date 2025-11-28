@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, TrendingUp, TrendingDown, Edit2, Trash2, Ban, ListChecks } from 'lucide-react';
+import { Search, Filter, TrendingUp, TrendingDown, Edit2, Trash2, Ban, ListChecks, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Transaction, TransactionType, Category } from '../types';
 import { CATEGORY_COLORS, CURRENCY_FORMATTER } from '../constants';
 
@@ -11,10 +11,19 @@ interface HistoryViewProps {
   onOpenBulkAction?: () => void;
 }
 
+type SortKey = 'date' | 'amount';
+type SortDirection = 'asc' | 'desc';
+
 export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, onEdit, onDelete, onClearAll, onOpenBulkAction }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
   const [filterType, setFilterType] = useState<string>('ALL');
+  
+  // Sorting State
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
+    key: 'date',
+    direction: 'desc'
+  });
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
@@ -27,8 +36,33 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, onEdit, 
   }, [transactions, searchTerm, filterCategory, filterType]);
 
   const sortedTransactions = useMemo(() => {
-      return [...filteredTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [filteredTransactions]);
+      const sorted = [...filteredTransactions];
+      sorted.sort((a, b) => {
+        if (sortConfig.key === 'date') {
+          const dateA = new Date(a.date).getTime();
+          const dateB = new Date(b.date).getTime();
+          return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
+        } else {
+          // Sort by absolute amount magnitude
+          return sortConfig.direction === 'asc' 
+            ? a.amount - b.amount 
+            : b.amount - a.amount;
+        }
+      });
+      return sorted;
+  }, [filteredTransactions, sortConfig]);
+
+  const handleSort = (key: SortKey) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  const getSortIcon = (key: SortKey) => {
+    if (sortConfig.key !== key) return <ArrowUpDown size={14} className="opacity-30" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -112,10 +146,24 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, onEdit, 
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="px-6 py-3 font-semibold text-slate-500">Data</th>
+                <th 
+                  className="px-6 py-3 font-semibold text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                  onClick={() => handleSort('date')}
+                >
+                  <div className="flex items-center gap-1">
+                    Data {getSortIcon('date')}
+                  </div>
+                </th>
                 <th className="px-6 py-3 font-semibold text-slate-500">Opis</th>
                 <th className="px-6 py-3 font-semibold text-slate-500">Kategoria</th>
-                <th className="px-6 py-3 font-semibold text-slate-500 text-right">Kwota</th>
+                <th 
+                  className="px-6 py-3 font-semibold text-slate-500 text-right cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                  onClick={() => handleSort('amount')}
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    Kwota {getSortIcon('amount')}
+                  </div>
+                </th>
                 <th className="px-6 py-3 font-semibold text-slate-500 text-center">Akcje</th>
               </tr>
             </thead>
@@ -126,7 +174,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, onEdit, 
                     <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                       {new Date(t.date).toLocaleDateString('pl-PL')}
                     </td>
-                    <td className="px-6 py-4 text-slate-800 font-medium max-w-xs truncate">
+                    <td 
+                      className="px-6 py-4 text-slate-800 font-medium max-w-xs truncate" 
+                      title={t.description} // Tooltip showing full description
+                    >
                       {t.description}
                     </td>
                     <td className="px-6 py-4">
