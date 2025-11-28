@@ -28,7 +28,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = 
+        t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.amount.toString().includes(searchTerm);
       const matchesCategory = filterCategoryId === 'ALL' || t.categoryId === filterCategoryId;
       const matchesType = filterType === 'ALL' || t.type === filterType;
       
@@ -105,7 +107,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Szukaj w opisie..."
+            placeholder="Szukaj w opisie lub kwocie..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-900"
@@ -206,7 +208,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
                     Kwota {getSortIcon('amount')}
                   </div>
                 </th>
-                <th className="px-6 py-3 font-semibold text-slate-500 text-center">Akcje</th>
+                <th className="px-2 py-3 font-semibold text-slate-500 text-center w-20">Akcje</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -253,8 +255,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
                       <td className={`px-6 py-4 text-right font-semibold whitespace-nowrap ${t.type === TransactionType.INCOME ? 'text-green-600' : 'text-slate-800'}`}>
                         {t.type === TransactionType.INCOME ? '+' : '-'}{CURRENCY_FORMATTER.format(t.amount)}
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <td className="px-2 py-4 text-center">
+                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
                             onClick={() => onEdit(t)}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"

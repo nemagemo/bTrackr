@@ -12,162 +12,184 @@ export const SYSTEM_IDS = {
   OTHER_INCOME: 'sys_other_income',
 };
 
+const createSub = (name: string) => ({ id: crypto.randomUUID(), name });
+
 export const DEFAULT_CATEGORIES: CategoryItem[] = [
   // --- INCOMES ---
   {
     id: SYSTEM_IDS.SALARY,
     name: 'Wynagrodzenie',
     type: TransactionType.INCOME,
-    color: '#22c55e', // Green-500
-    isSystem: true,
-    subcategories: []
+    color: '#22c55e',
+    isSystem: false,
+    subcategories: [
+      createSub('Wypłata'), createSub('Premie'), createSub('Nadgodziny'), createSub('Inne')
+    ]
   },
   {
-    id: SYSTEM_IDS.INVESTMENTS, // Can be income (profit) or expense (deposit) - handled by type check or duplicate? 
-    // Usually Investment Income is separate. Let's keep Investment as Income category here.
-    name: 'Inwestycje (Zysk)',
+    id: 'inc_additional',
+    name: 'Przychody Dodatkowe',
     type: TransactionType.INCOME,
-    color: '#06b6d4', // Cyan-500
-    isSystem: true,
-    subcategories: []
+    color: '#84cc16',
+    isSystem: false,
+    subcategories: [
+      createSub('Freelance'), createSub('Sprzedaż rzeczy'), createSub('Działalność gospodarcza'), createSub('Inne')
+    ]
   },
   {
-    id: 'sys_income_transfer',
-    name: 'Przelew własny',
+    id: 'inc_capital',
+    name: 'Kapitał i Inwestycje',
     type: TransactionType.INCOME,
-    color: '#0d9488', // Teal-600
-    isSystem: true,
-    subcategories: []
+    color: '#06b6d4',
+    isSystem: false,
+    subcategories: [
+      createSub('Dywidendy'), createSub('Odsetki'), createSub('Wynajem'), createSub('Zwrot z inwestycji'), createSub('Inne')
+    ]
   },
   {
     id: SYSTEM_IDS.OTHER_INCOME,
-    name: 'Inne Przychody',
+    name: 'Inne Wpływy',
     type: TransactionType.INCOME,
-    color: '#64748b', // Slate-500
-    isSystem: true,
-    subcategories: []
+    color: '#64748b',
+    isSystem: false,
+    subcategories: [
+      createSub('Prezenty'), createSub('Zwrot podatku'), createSub('Świadczenia socjalne'), createSub('Inne')
+    ]
   },
 
   // --- EXPENSES ---
   {
-    id: 'cat_food',
-    name: 'Jedzenie',
+    id: 'cat_housing',
+    name: 'Dom i Rachunki',
     type: TransactionType.EXPENSE,
-    color: '#ef4444', // Red-500
+    color: '#eab308',
     isSystem: false,
     subcategories: [
-      { id: 'sub_groceries', name: 'Spożywcze' },
-      { id: 'sub_dining', name: 'Restauracje' }
+      createSub('Czynsz'), createSub('Prąd'), createSub('Gaz'), createSub('Woda'),
+      createSub('Internet'), createSub('Telefon'), createSub('Chemia gospodarcza'),
+      createSub('Wyposażenie domu'), createSub('Remonty'), createSub('Naprawy'), createSub('Inne')
     ]
   },
   {
-    id: 'cat_shopping',
-    name: 'Zakupy',
+    id: 'cat_food',
+    name: 'Jedzenie',
     type: TransactionType.EXPENSE,
-    color: '#3b82f6', // Blue-500
+    color: '#ef4444',
     isSystem: false,
     subcategories: [
-      { id: 'sub_clothes', name: 'Ubrania' },
-      { id: 'sub_electronics', name: 'Elektronika' },
-      { id: 'sub_home', name: 'Dom' }
+      createSub('Zakupy spożywcze'), createSub('Restauracje'), createSub('Zamawianie jedzenia'),
+      createSub('Kawa i Przekąski'), createSub('Alkohol'), createSub('Inne')
     ]
   },
   {
     id: 'cat_transport',
     name: 'Transport',
     type: TransactionType.EXPENSE,
-    color: '#f97316', // Orange-500
+    color: '#f97316',
     isSystem: false,
     subcategories: [
-      { id: 'sub_fuel', name: 'Paliwo' },
-      { id: 'sub_public', name: 'Komunikacja' },
-      { id: 'sub_taxi', name: 'Taxi/Uber' }
+      createSub('Paliwo'), createSub('Komunikacja miejska'), createSub('Taxi'), createSub('Uber'),
+      createSub('Serwis'), createSub('Ubezpieczenie auta'), createSub('Parking'), createSub('Autostrady'), createSub('Inne')
     ]
   },
   {
-    id: 'cat_housing',
-    name: 'Mieszkanie',
+    id: 'cat_shopping',
+    name: 'Zakupy',
     type: TransactionType.EXPENSE,
-    color: '#eab308', // Yellow-500
+    color: '#3b82f6',
     isSystem: false,
     subcategories: [
-      { id: 'sub_rent', name: 'Czynsz' },
-      { id: 'sub_renovation', name: 'Remont' }
-    ]
-  },
-  {
-    id: 'cat_bills',
-    name: 'Opłaty',
-    type: TransactionType.EXPENSE,
-    color: '#0ea5e9', // Sky-500
-    isSystem: false,
-    subcategories: [
-      { id: 'sub_energy', name: 'Prąd/Gaz' },
-      { id: 'sub_internet', name: 'Internet/Telefon' }
-    ]
-  },
-  {
-    id: 'cat_entertainment',
-    name: 'Rozrywka',
-    type: TransactionType.EXPENSE,
-    color: '#8b5cf6', // Violet-500
-    isSystem: false,
-    subcategories: [
-      { id: 'sub_subs', name: 'Subskrypcje' },
-      { id: 'sub_cinema', name: 'Kino/Kultura' },
-      { id: 'sub_travel', name: 'Wyjazdy' }
+      createSub('Ubrania'), createSub('Obuwie'), createSub('Elektronika'), createSub('Gadżety'),
+      createSub('Kosmetyki'), createSub('Higiena'), createSub('Hobby'), createSub('Inne')
     ]
   },
   {
     id: 'cat_health',
-    name: 'Zdrowie',
+    name: 'Zdrowie i Uroda',
     type: TransactionType.EXPENSE,
-    color: '#ec4899', // Pink-500
+    color: '#ec4899',
     isSystem: false,
     subcategories: [
-      { id: 'sub_doctor', name: 'Lekarz' },
-      { id: 'sub_pharmacy', name: 'Apteka' }
+      createSub('Lekarz'), createSub('Badania'), createSub('Apteka'), createSub('Suplementy'),
+      createSub('Fryzjer'), createSub('Kosmetyczka'), createSub('Sport'), createSub('Siłownia'), createSub('Inne')
     ]
   },
   {
-    id: SYSTEM_IDS.CREDIT,
-    name: 'Kredyt',
+    id: 'cat_entertainment',
+    name: 'Rozrywka i Edukacja',
     type: TransactionType.EXPENSE,
-    color: '#9f1239', // Rose-800
-    isSystem: true,
-    subcategories: []
+    color: '#8b5cf6',
+    isSystem: false,
+    subcategories: [
+      createSub('Subskrypcje'), createSub('Kino'), createSub('Teatr'), createSub('Koncerty'),
+      createSub('Książki'), createSub('Kursy'), createSub('Szkolenia'), createSub('Gry'), createSub('Inne')
+    ]
   },
   {
-    id: 'sys_exp_invest',
-    name: 'Inwestycje (Wpłata)',
+    id: 'cat_travel',
+    name: 'Podróże',
     type: TransactionType.EXPENSE,
-    color: '#06b6d4', // Cyan-500
-    isSystem: true,
-    subcategories: []
+    color: '#14b8a6',
+    isSystem: false,
+    subcategories: [
+      createSub('Bilety'), createSub('Noclegi'), createSub('Kieszonkowe'), createSub('Inne')
+    ]
+  },
+  {
+    id: 'cat_kids',
+    name: 'Dzieci',
+    type: TransactionType.EXPENSE,
+    color: '#f43f5e',
+    isSystem: false,
+    subcategories: [
+      createSub('Szkoła'), createSub('Przedszkole'), createSub('Zabawki'), createSub('Ubranka'),
+      createSub('Zajęcia dodatkowe'), createSub('Inne')
+    ]
+  },
+  {
+    id: 'cat_pets',
+    name: 'Zwierzęta',
+    type: TransactionType.EXPENSE,
+    color: '#a8a29e',
+    isSystem: false,
+    subcategories: [
+      createSub('Karma'), createSub('Weterynarz'), createSub('Akcesoria'), createSub('Inne')
+    ]
   },
   {
     id: SYSTEM_IDS.SAVINGS,
     name: 'Oszczędności',
     type: TransactionType.EXPENSE,
-    color: '#10b981', // Emerald-500
-    isSystem: true,
-    subcategories: []
+    color: '#10b981',
+    isSystem: false,
+    isIncludedInSavings: true, // Default true
+    subcategories: [
+      createSub('Fundusz awaryjny'), createSub('Poduszka finansowa'), createSub('Konto oszczędnościowe'),
+      createSub('Cele krótkoterminowe'), createSub('Nadpłata kredytu'), createSub('Lokaty'), createSub('Inne')
+    ]
   },
   {
-    id: SYSTEM_IDS.INTERNAL_TRANSFER,
-    name: 'Przelew własny',
+    id: SYSTEM_IDS.INVESTMENTS,
+    name: 'Inwestycje',
     type: TransactionType.EXPENSE,
-    color: '#0d9488', // Teal-600
-    isSystem: true,
-    subcategories: []
+    color: '#06b6d4',
+    isSystem: false,
+    isIncludedInSavings: true, // Default true
+    subcategories: [
+      createSub('Giełda'), createSub('Obligacje'), createSub('IKE / IKZE'),
+      createSub('Waluty'), createSub('Kryptowaluty'), createSub('Złoto'), createSub('Inne')
+    ]
   },
   {
     id: SYSTEM_IDS.OTHER_EXPENSE,
-    name: 'Inne',
+    name: 'Zobowiązania i Inne',
     type: TransactionType.EXPENSE,
-    color: '#64748b', // Slate-500
-    isSystem: true,
-    subcategories: []
+    color: '#64748b',
+    isSystem: false,
+    subcategories: [
+      createSub('Raty kredytów'), createSub('Ubezpieczenia na życie'), createSub('Prezenty'),
+      createSub('Charytatywność'), createSub('Inne')
+    ]
   }
 ];
 
@@ -183,9 +205,6 @@ export const getCategoryName = (categoryId: string, categories: CategoryItem[]):
   return cat ? cat.name : 'Nieznana';
 };
 
-// Keyword map now maps to Names (or we map to IDs on runtime). 
-// Since IDs are dynamic, we must map keywords to IDs *during* runtime or initial load.
-// We will keep a simple Keyword -> Name map for now, and the Import logic will try to find ID by Name.
 export const KEYWORD_TO_CATEGORY_NAME: Record<string, string> = {
   // Jedzenie
   'biedronka': 'Jedzenie', 'lidl': 'Jedzenie', 'kaufland': 'Jedzenie', 'auchan': 'Jedzenie',
@@ -194,26 +213,26 @@ export const KEYWORD_TO_CATEGORY_NAME: Record<string, string> = {
   
   // Zakupy
   'allegro': 'Zakupy', 'amazon': 'Zakupy', 'zara': 'Zakupy', 'h&m': 'Zakupy', 
-  'decathlon': 'Zakupy', 'media markt': 'Zakupy', 'ikea': 'Mieszkanie',
+  'decathlon': 'Zakupy', 'media markt': 'Zakupy', 'ikea': 'Dom i Rachunki',
   
   // Transport
   'orlen': 'Transport', 'bp ': 'Transport', 'shell': 'Transport', 'uber': 'Transport',
   'bolt': 'Transport', 'pkp': 'Transport', 'bilet': 'Transport', 'parking': 'Transport',
 
   // Opłaty
-  'tauron': 'Opłaty', 'pge': 'Opłaty', 'upc': 'Opłaty', 'orange': 'Opłaty', 'czynsz': 'Mieszkanie',
+  'tauron': 'Dom i Rachunki', 'pge': 'Dom i Rachunki', 'upc': 'Dom i Rachunki', 'orange': 'Dom i Rachunki', 'czynsz': 'Dom i Rachunki',
   
   // Rozrywka
-  'netflix': 'Rozrywka', 'spotify': 'Rozrywka', 'kino': 'Rozrywka', 'steam': 'Rozrywka',
+  'netflix': 'Rozrywka i Edukacja', 'spotify': 'Rozrywka i Edukacja', 'kino': 'Rozrywka i Edukacja', 'steam': 'Rozrywka i Edukacja',
   
   // Zdrowie
-  'apteka': 'Zdrowie', 'luxmed': 'Zdrowie', 'medicover': 'Zdrowie',
+  'apteka': 'Zdrowie i Uroda', 'luxmed': 'Zdrowie i Uroda', 'medicover': 'Zdrowie i Uroda',
 
   // Kredyt
-  'rata': 'Kredyt', 'kredyt': 'Kredyt', 'hipoteka': 'Kredyt',
+  'rata': 'Zobowiązania i Inne', 'kredyt': 'Zobowiązania i Inne', 'hipoteka': 'Zobowiązania i Inne',
 
   // Tech
-  'przelew własny': 'Przelew własny', 'lokata': 'Oszczędności', 'xtb': 'Inwestycje (Wpłata)'
+  'lokata': 'Oszczędności', 'xtb': 'Inwestycje'
 };
 
 export const CURRENCY_FORMATTER = new Intl.NumberFormat('pl-PL', {

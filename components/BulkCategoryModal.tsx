@@ -10,7 +10,7 @@ interface BulkCategoryModalProps {
   onClose: () => void;
   transactions: Transaction[];
   categories: CategoryItem[];
-  onUpdate: (ids: string[], newCategoryId: string) => void;
+  onUpdate: (ids: string[], newCategoryId: string, newSubcategoryId?: string) => void;
 }
 
 export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
@@ -23,6 +23,7 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [targetCategoryId, setTargetCategoryId] = useState<string>('');
+  const [targetSubcategoryId, setTargetSubcategoryId] = useState<string>('');
   const [activeType, setActiveType] = useState<TransactionType>(TransactionType.EXPENSE);
 
   // Set default category when modal opens or type changes
@@ -31,11 +32,18 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
        const cats = categories.filter(c => c.type === activeType);
        if (cats.length > 0) {
          setTargetCategoryId(cats[0].id);
+         setTargetSubcategoryId('');
        } else {
          setTargetCategoryId('');
+         setTargetSubcategoryId('');
        }
     }
   }, [isOpen, categories, activeType]);
+
+  // Reset subcategory when category changes
+  useEffect(() => {
+    setTargetSubcategoryId('');
+  }, [targetCategoryId]);
 
   // Filter transactions based on search term and active type
   const filteredTransactions = useMemo(() => {
@@ -43,7 +51,10 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
     const lowerTerm = searchTerm.toLowerCase();
     return transactions
       .filter(t => t.type === activeType)
-      .filter(t => t.description.toLowerCase().includes(lowerTerm))
+      .filter(t => 
+        t.description.toLowerCase().includes(lowerTerm) ||
+        t.amount.toString().includes(lowerTerm)
+      )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, searchTerm, activeType]);
 
@@ -73,13 +84,14 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
 
   const handleApply = () => {
     if (selectedIds.size === 0) return;
-    onUpdate(Array.from(selectedIds), targetCategoryId);
+    onUpdate(Array.from(selectedIds), targetCategoryId, targetSubcategoryId || undefined);
     
     // Clear selection
     setSelectedIds(new Set());
   };
 
   const isAllVisibleSelected = filteredTransactions.length > 0 && filteredTransactions.every(t => selectedIds.has(t.id));
+  const selectedCategory = categories.find(c => c.id === targetCategoryId);
 
   if (!isOpen) return null;
 
@@ -128,7 +140,7 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder={`Wpisz frazę dla ${activeType === TransactionType.EXPENSE ? 'wydatków' : 'przychodów'}...`}
+              placeholder={`Wpisz frazę lub kwotę dla ${activeType === TransactionType.EXPENSE ? 'wydatków' : 'przychodów'}...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm text-slate-900"
@@ -235,6 +247,19 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
+
+            {selectedCategory && selectedCategory.subcategories.length > 0 && (
+              <select
+                value={targetSubcategoryId}
+                onChange={(e) => setTargetSubcategoryId(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer flex-1 sm:flex-none sm:w-40 text-slate-900"
+              >
+                <option value="">-- Podkategoria --</option>
+                {selectedCategory.subcategories.map((sub) => (
+                  <option key={sub.id} value={sub.id}>{sub.name}</option>
+                ))}
+              </select>
+            )}
             
             <Button 
               onClick={handleApply} 

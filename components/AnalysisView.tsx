@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { Filter, History, AlertCircle } from 'lucide-react';
@@ -8,12 +9,13 @@ import { SankeyDiagram } from './SankeyDiagram';
 interface AnalysisViewProps {
   transactions: Transaction[];
   categories: CategoryItem[];
+  includeBalanceInSavings?: boolean;
 }
 
 type PeriodType = 'YEAR' | 'QUARTER' | 'MONTH';
 type SankeyScope = 'ALL' | 'FILTERED';
 
-export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, categories }) => {
+export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, categories, includeBalanceInSavings = false }) => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [periodType, setPeriodType] = useState<PeriodType>('YEAR');
   const [periodValue, setPeriodValue] = useState<number>(0); 
@@ -49,11 +51,10 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
       if (t.type === TransactionType.INCOME) {
         acc[key].income += t.amount;
       } else {
-        const isNonConsumption = 
-            t.categoryId === SYSTEM_IDS.SAVINGS || 
-            t.categoryId === SYSTEM_IDS.INVESTMENTS;
+        const category = categories.find(c => c.id === t.categoryId);
+        const isSavings = category?.isIncludedInSavings;
         
-        if (!isNonConsumption) acc[key].expense += t.amount;
+        if (!isSavings) acc[key].expense += t.amount;
       }
       return acc;
     }, {} as Record<string, any>);
@@ -64,34 +65,48 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === key;
         });
         const inc = bucketTxs.filter(t => t.type === TransactionType.INCOME).reduce((s, t) => s + t.amount, 0);
-        const consumption = bucketTxs.filter(t => 
-             t.type === TransactionType.EXPENSE && 
-             t.categoryId !== SYSTEM_IDS.SAVINGS &&
-             t.categoryId !== SYSTEM_IDS.INVESTMENTS
-        ).reduce((s, t) => s + t.amount, 0);
+        const consumption = bucketTxs.filter(t => {
+             if (t.type !== TransactionType.EXPENSE) return false;
+             const cat = categories.find(c => c.id === t.categoryId);
+             return !cat?.isIncludedInSavings;
+        }).reduce((s, t) => s + t.amount, 0);
         grouped[key].balance = inc - consumption;
     });
 
     return Object.values(grouped).sort((a: any, b: any) => a.date.localeCompare(b.date));
-  }, [filteredTransactions]);
+  }, [filteredTransactions, categories]);
 
   const stats = useMemo(() => {
     const totalIncome = filteredTransactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + t.amount, 0);
-    const totalConsumption = filteredTransactions.filter(t => 
-        t.type === TransactionType.EXPENSE && 
-        t.categoryId !== SYSTEM_IDS.SAVINGS && 
-        t.categoryId !== SYSTEM_IDS.INVESTMENTS
-    ).reduce((sum, t) => sum + t.amount, 0);
     
-    const activeSavings = filteredTransactions.filter(t => 
-      t.type === TransactionType.EXPENSE && (t.categoryId === SYSTEM_IDS.SAVINGS || t.categoryId === SYSTEM_IDS.INVESTMENTS)
-    ).reduce((sum, t) => sum + t.amount, 0);
+    // Consumption = Expenses NOT flagged as savings
+    const totalConsumption = filteredTransactions.filter(t => {
+        if (t.type !== TransactionType.EXPENSE) return false;
+        const cat = categories.find(c => c.id === t.categoryId);
+        return !cat?.isIncludedInSavings;
+    }).reduce((sum, t) => sum + t.amount, 0);
+    
+    // Active Savings = Expenses flagged as savings
+    const activeSavings = filteredTransactions.filter(t => {
+        if (t.type !== TransactionType.EXPENSE) return false;
+        const cat = categories.find(c => c.id === t.categoryId);
+        return !!cat?.isIncludedInSavings;
+    }).reduce((sum, t) => sum + t.amount, 0);
 
-    const balance = totalIncome - totalConsumption; 
-    const savingsRate = totalIncome > 0 ? (activeSavings / totalIncome) * 100 : 0;
+    const balance = totalIncome - totalConsumption - activeSavings; // Net remaining cash
+    
+    // Savings Rate Calculation
+    // Base: Active Savings
+    // Optional: Add balance (if positive)
+    let totalSavingsForRate = activeSavings;
+    if (includeBalanceInSavings && balance > 0) {
+      totalSavingsForRate += balance;
+    }
+
+    const savingsRate = totalIncome > 0 ? (totalSavingsForRate / totalIncome) * 100 : 0;
 
     return { totalIncome, totalConsumption, balance, savingsRate, activeSavings };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, categories, includeBalanceInSavings]);
 
   if (transactions.length === 0) return <div className="p-8 text-center text-slate-400 border rounded-2xl">Brak danych.</div>;
 

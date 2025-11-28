@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
-import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers, Trash2, FilePlus, AlertTriangle } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers, Trash2, FilePlus, AlertTriangle, Link } from 'lucide-react';
 import { Button } from './Button';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { KEYWORD_TO_CATEGORY_NAME } from '../constants';
@@ -14,7 +15,7 @@ interface ImportModalProps {
 }
 
 type ColumnMapping = 'date' | 'amount' | 'description' | 'category' | 'skip';
-type ImportStep = 'UPLOAD' | 'DECISION' | 'MAP' | 'GROUP';
+type ImportStep = 'UPLOAD' | 'RECONCILE' | 'DECISION' | 'MAP' | 'GROUP';
 
 interface GroupedTransaction {
   signature: string;
@@ -23,6 +24,18 @@ interface GroupedTransaction {
   ids: string[];
   currentCategoryName: string; // Used for UI
   enabled: boolean;
+}
+
+interface ConflictItem {
+  fileCategory: string;
+  fileSubcategory?: string;
+  type: TransactionType; // Infer from one of the transactions
+  count: number;
+}
+
+interface ReconciliationMapping {
+  targetCategoryId: string;
+  targetSubcategoryId?: string;
 }
 
 const IGNORED_PREFIXES = [
@@ -47,6 +60,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const [detectedGroups, setDetectedGroups] = useState<GroupedTransaction[]>([]);
   const [isBackupFile, setIsBackupFile] = useState(false);
 
+  // Reconciliation State
+  const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
+  const [reconciliationMap, setReconciliationMap] = useState<Record<string, ReconciliationMapping>>({});
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -58,6 +75,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setImportedFile(file);
     setError('');
     setIsBackupFile(false);
+    setConflicts([]);
+    setReconciliationMap({});
 
     Papa.parse(file, {
       skipEmptyLines: true,
@@ -72,10 +91,18 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
           if (isBackup) {
             const parsedBackup = parseBackupFile(rows);
             setPendingItems(parsedBackup);
-            if (hasExistingTransactions) {
-              setStep('DECISION');
+            
+            // Check for category mismatches
+            const detectedConflicts = analyzeConflicts(parsedBackup);
+            if (detectedConflicts.length > 0) {
+              setConflicts(detectedConflicts);
+              setStep('RECONCILE');
             } else {
-              finalizeImport(parsedBackup, false);
+              if (hasExistingTransactions) {
+                setStep('DECISION');
+              } else {
+                finalizeImport(parsedBackup, false);
+              }
             }
           } else {
             const previewRows = rows.slice(0, 6);
@@ -111,17 +138,90 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       const row = rows[i];
       if (row.length < 5) continue;
       
+      let rawType = row[typeIdx] as TransactionType;
+      // Safety check for type
+      if (rawType !== TransactionType.INCOME && rawType !== TransactionType.EXPENSE) {
+         // Try to infer from category logic or default to Expense
+         rawType = TransactionType.EXPENSE;
+      }
+
       items.push({
         id: row[idIdx] || crypto.randomUUID(),
         date: row[dateIdx],
         amount: parseFloat(row[amountIdx]),
         description: row[descIdx],
-        type: row[typeIdx] as TransactionType,
+        type: rawType,
         categoryName: row[catIdx], // Store Name
         subcategoryName: subIdx > -1 ? row[subIdx] : undefined
       });
     }
     return items;
+  };
+
+  const analyzeConflicts = (items: any[]): ConflictItem[] => {
+    const conflictMap = new Map<string, ConflictItem>();
+
+    items.forEach(item => {
+      const fileCatName = item.categoryName;
+      const fileSubName = item.subcategoryName;
+      
+      // Try to find exact match
+      const matchingCat = categories.find(c => c.name.toLowerCase() === fileCatName.toLowerCase());
+      let hasConflict = false;
+
+      if (!matchingCat) {
+        hasConflict = true;
+      } else if (fileSubName) {
+        const matchingSub = matchingCat.subcategories.find(s => s.name.toLowerCase() === fileSubName.toLowerCase());
+        if (!matchingSub) {
+          hasConflict = true;
+        }
+      }
+
+      if (hasConflict) {
+        const key = `${fileCatName}:::${fileSubName || ''}`;
+        if (!conflictMap.has(key)) {
+          conflictMap.set(key, {
+            fileCategory: fileCatName,
+            fileSubcategory: fileSubName,
+            type: item.type,
+            count: 0
+          });
+        }
+        const conflict = conflictMap.get(key)!;
+        conflict.count++;
+      }
+    });
+
+    return Array.from(conflictMap.values());
+  };
+
+  const handleReconciliationUpdate = (key: string, catId: string, subId?: string) => {
+    setReconciliationMap(prev => ({
+      ...prev,
+      [key]: { targetCategoryId: catId, targetSubcategoryId: subId }
+    }));
+  };
+
+  const handleReconciliationComplete = () => {
+    // Ensure all conflicts are resolved
+    const conflictKeys = conflicts.map(c => `${c.fileCategory}:::${c.fileSubcategory || ''}`);
+    const resolvedKeys = Object.keys(reconciliationMap);
+    
+    // Simple check: do we have a mapping for every conflict?
+    // (Actually, user might map multiple conflicts to same place, but keys must exist)
+    const allResolved = conflictKeys.every(k => resolvedKeys.includes(k) && reconciliationMap[k].targetCategoryId);
+
+    if (!allResolved) {
+      alert("Proszę dopasować wszystkie kategorie przed kontynuacją.");
+      return;
+    }
+
+    if (hasExistingTransactions) {
+      setStep('DECISION');
+    } else {
+      finalizeImport(pendingItems, false);
+    }
   };
 
   const handleDecision = (mode: 'APPEND' | 'REPLACE') => {
@@ -296,7 +396,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   };
 
   const finalizeImport = (items: any[], clearHistory: boolean) => {
-    const groupedItems = items.map(item => {
+    // Phase 1: Group Updates (for raw CSV import)
+    let processedItems = items.map(item => {
       const group = detectedGroups.find(g => g.ids.includes(item.id));
       if (group && group.enabled) return { ...item, categoryName: group.currentCategoryName };
       return item;
@@ -307,38 +408,67 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     const currentCategoriesMap = new Map<string, CategoryItem>(categories.map(c => [c.name.toLowerCase(), c]));
     const batchCreatedMap = new Map<string, CategoryItem>();
 
-    groupedItems.forEach(item => {
-      const catName = item.categoryName || 'Inne';
-      const catNameLower = catName.toLowerCase();
-      
+    processedItems.forEach(item => {
       let categoryId = '';
       let subcategoryId: string | undefined = undefined;
 
-      let matchedCat = currentCategoriesMap.get(catNameLower) || batchCreatedMap.get(catNameLower);
+      // Logic for BACKUP reconciliation vs RAW CSV creation
+      if (isBackupFile) {
+        // Use reconciliation map first, then direct match
+        const conflictKey = `${item.categoryName}:::${item.subcategoryName || ''}`;
+        const mapping = reconciliationMap[conflictKey];
 
-      if (!matchedCat) {
-        matchedCat = {
-          id: crypto.randomUUID(),
-          name: catName,
-          type: item.type,
-          color: '#64748b',
-          isSystem: false,
-          subcategories: []
-        };
-        batchCreatedMap.set(catNameLower, matchedCat);
-        createdCategories.push(matchedCat);
-      }
-      categoryId = matchedCat!.id;
-
-      if (item.subcategoryName) {
-        const subName = item.subcategoryName;
-        const existingSub = matchedCat!.subcategories.find(s => s.name.toLowerCase() === subName.toLowerCase());
-        if (existingSub) {
-          subcategoryId = existingSub.id;
+        if (mapping) {
+          categoryId = mapping.targetCategoryId;
+          subcategoryId = mapping.targetSubcategoryId;
         } else {
-          const newSub = { id: crypto.randomUUID(), name: subName };
-          matchedCat!.subcategories.push(newSub);
-          subcategoryId = newSub.id;
+          // Direct match expected
+          const matchedCat = currentCategoriesMap.get(item.categoryName.toLowerCase());
+          if (matchedCat) {
+             categoryId = matchedCat.id;
+             if (item.subcategoryName) {
+                const matchedSub = matchedCat.subcategories.find(s => s.name.toLowerCase() === item.subcategoryName.toLowerCase());
+                if (matchedSub) subcategoryId = matchedSub.id;
+             }
+          } else {
+             // Fallback for unexpected case (should have been caught in reconcile)
+             // Just map to Inne
+             // We can pick first category of type
+             const fallback = categories.find(c => c.type === item.type);
+             if (fallback) categoryId = fallback.id;
+          }
+        }
+      } else {
+        // Raw CSV: Auto-create Logic
+        const catName = item.categoryName || 'Inne';
+        const catNameLower = catName.toLowerCase();
+        
+        let matchedCat = currentCategoriesMap.get(catNameLower) || batchCreatedMap.get(catNameLower);
+
+        if (!matchedCat) {
+          matchedCat = {
+            id: crypto.randomUUID(),
+            name: catName,
+            type: item.type,
+            color: '#64748b',
+            isSystem: false,
+            subcategories: [{ id: crypto.randomUUID(), name: 'Inne' }]
+          };
+          batchCreatedMap.set(catNameLower, matchedCat);
+          createdCategories.push(matchedCat);
+        }
+        categoryId = matchedCat!.id;
+
+        if (item.subcategoryName) {
+          const subName = item.subcategoryName;
+          const existingSub = matchedCat!.subcategories.find(s => s.name.toLowerCase() === subName.toLowerCase());
+          if (existingSub) {
+            subcategoryId = existingSub.id;
+          } else {
+            const newSub = { id: crypto.randomUUID(), name: subName };
+            matchedCat!.subcategories.push(newSub);
+            subcategoryId = newSub.id;
+          }
         }
       }
 
@@ -363,6 +493,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setRawFile([]);
     setPendingItems([]);
     setDetectedGroups([]);
+    setConflicts([]);
+    setReconciliationMap({});
     onClose();
   };
 
@@ -375,6 +507,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
             {step === 'GROUP' && 'Wykryte grupy'}
             {step === 'MAP' && 'Dopasuj kolumny'}
             {step === 'DECISION' && 'Wykryto dane'}
+            {step === 'RECONCILE' && 'Dopasuj kategorie'}
           </h2>
           <button onClick={handleClose}><X size={24} className="text-slate-400"/></button>
         </div>
@@ -388,12 +521,79 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                {error && <p className="text-red-500 mt-2">{error}</p>}
              </div>
           )}
+          
           {step === 'DECISION' && (
             <div className="grid grid-cols-2 gap-4 max-w-lg mx-auto mt-10">
               <button onClick={() => handleDecision('APPEND')} className="p-6 bg-white border rounded-xl hover:bg-indigo-50 hover:border-indigo-500 font-bold text-slate-700 flex flex-col items-center"><FilePlus className="mb-2 text-indigo-500"/> Dołącz</button>
               <button onClick={() => handleDecision('REPLACE')} className="p-6 bg-white border rounded-xl hover:bg-red-50 hover:border-red-500 font-bold text-slate-700 flex flex-col items-center"><Trash2 className="mb-2 text-red-500"/> Zastąp</button>
             </div>
           )}
+
+          {step === 'RECONCILE' && (
+            <div className="space-y-6">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                 <AlertTriangle className="text-amber-600 flex-shrink-0" size={20} />
+                 <div>
+                   <h3 className="font-bold text-amber-800 text-sm">Wykryto nieznane kategorie</h3>
+                   <p className="text-sm text-amber-700 mt-1">
+                     Plik zawiera kategorie, których nie masz w aplikacji. Proszę wskazać, do których obecnych kategorii mają trafić te transakcje.
+                   </p>
+                 </div>
+              </div>
+
+              <div className="space-y-3">
+                 {conflicts.map((conflict, i) => {
+                    const key = `${conflict.fileCategory}:::${conflict.fileSubcategory || ''}`;
+                    const currentMap = reconciliationMap[key] || {};
+                    const relevantCategories = categories.filter(c => c.type === conflict.type);
+                    const selectedCat = categories.find(c => c.id === currentMap.targetCategoryId);
+
+                    return (
+                      <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                         <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-slate-700">
+                               <div className="font-bold">{conflict.fileCategory}</div>
+                               {conflict.fileSubcategory && (
+                                 <>
+                                   <ArrowRight size={14} className="text-slate-400" />
+                                   <div className="font-medium">{conflict.fileSubcategory}</div>
+                                 </>
+                               )}
+                               <div className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 ml-2">
+                                  {conflict.count} transakcji
+                               </div>
+                            </div>
+                            <Link size={16} className="text-slate-300" />
+                         </div>
+
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <select
+                              value={currentMap.targetCategoryId || ''}
+                              onChange={(e) => handleReconciliationUpdate(key, e.target.value, '')}
+                              className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 text-slate-900"
+                            >
+                               <option value="">-- Wybierz kategorię --</option>
+                               {relevantCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+
+                            {selectedCat && selectedCat.subcategories.length > 0 && (
+                               <select
+                                value={currentMap.targetSubcategoryId || ''}
+                                onChange={(e) => handleReconciliationUpdate(key, currentMap.targetCategoryId, e.target.value)}
+                                className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 text-slate-900"
+                               >
+                                 <option value="">-- Podkategoria (Opcjonalnie) --</option>
+                                 {selectedCat.subcategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                               </select>
+                            )}
+                         </div>
+                      </div>
+                    );
+                 })}
+              </div>
+            </div>
+          )}
+
           {step === 'MAP' && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 px-1">
@@ -486,6 +686,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
 
         <div className="p-4 bg-white border-t flex justify-end gap-2">
            {step === 'MAP' && <Button onClick={handleParseAndAnalyze}>Dalej</Button>}
+           {step === 'RECONCILE' && <Button onClick={handleReconciliationComplete}>Potwierdź dopasowania</Button>}
            {step === 'GROUP' && <Button onClick={() => finalizeImport(pendingItems, importMode === 'REPLACE')}>Importuj</Button>}
         </div>
       </div>

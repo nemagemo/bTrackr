@@ -1,15 +1,90 @@
 
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, Lock } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank } from 'lucide-react';
 import { CategoryItem, SubcategoryItem, TransactionType } from '../types';
-import { Button } from './Button';
 
 interface SettingsViewProps {
   categories: CategoryItem[];
   onUpdateCategories: (categories: CategoryItem[]) => void;
+  onDeleteCategory: (id: string) => void;
+  onDeleteSubcategory: (catId: string, subId: string) => void;
+  includeBalanceInSavings: boolean;
+  onToggleBalanceInSavings: (val: boolean) => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ categories, onUpdateCategories }) => {
+// Mini-component for adding subcategories with better UX
+const AddSubcategoryInput = ({ onAdd }: { onAdd: (name: string) => void }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [value, setValue] = useState('');
+
+  const handleSave = () => {
+    if (value.trim()) {
+      onAdd(value.trim());
+      setValue('');
+      setIsEditing(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setValue('');
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      handleCancel();
+    }
+  };
+
+  if (!isEditing) {
+    return (
+      <button 
+        onClick={() => setIsEditing(true)}
+        className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1 py-1 px-2 rounded hover:bg-indigo-50 transition-colors w-fit"
+      >
+        <Plus size={14} /> Dodaj podkategorię
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 animate-fade-in w-full max-w-xs">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Nazwa..."
+        autoFocus
+        className="flex-1 bg-white border border-indigo-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900"
+      />
+      <button 
+        onClick={handleSave} 
+        disabled={!value.trim()}
+        className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
+      >
+        <Check size={14} />
+      </button>
+      <button 
+        onClick={handleCancel}
+        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+};
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ 
+  categories, 
+  onUpdateCategories, 
+  onDeleteCategory, 
+  onDeleteSubcategory,
+  includeBalanceInSavings,
+  onToggleBalanceInSavings
+}) => {
   const [activeTab, setActiveTab] = useState<TransactionType>(TransactionType.EXPENSE);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   
@@ -33,17 +108,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ categories, onUpdate
       color: newCatColor,
       type: activeTab,
       isSystem: false,
-      subcategories: []
+      isIncludedInSavings: false,
+      subcategories: [{ id: crypto.randomUUID(), name: 'Inne' }]
     };
     onUpdateCategories([...categories, newCategory]);
     setIsAddingCat(false);
     setNewCatName('');
-  };
-
-  const handleDeleteCategory = (id: string) => {
-    if (confirm('Czy na pewno chcesz usunąć tę kategorię? Przypisane do niej transakcje mogą stracić kategoryzację.')) {
-      onUpdateCategories(categories.filter(c => c.id !== id));
-    }
   };
 
   const handleStartEdit = (cat: CategoryItem) => {
@@ -59,6 +129,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ categories, onUpdate
     setEditingCatId(null);
   };
 
+  const handleToggleSavingsInclusion = (catId: string) => {
+    onUpdateCategories(categories.map(c => 
+      c.id === catId ? { ...c, isIncludedInSavings: !c.isIncludedInSavings } : c
+    ));
+  };
+
   // Subcategory Logic
   const handleAddSubcategory = (catId: string, name: string) => {
     if (!name) return;
@@ -68,17 +144,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ categories, onUpdate
     ));
   };
 
-  const handleDeleteSubcategory = (catId: string, subId: string) => {
-    onUpdateCategories(categories.map(c => 
-      c.id === catId ? { ...c, subcategories: c.subcategories.filter(s => s.id !== subId) } : c
-    ));
+  const confirmDeleteCategory = (id: string) => {
+    if (confirm('Usunięcie kategorii spowoduje przeniesienie wszystkich jej transakcji do kategorii "Inne". Czy kontynuować?')) {
+      onDeleteCategory(id);
+    }
+  };
+
+  const confirmDeleteSubcategory = (catId: string, subId: string) => {
+    if (confirm('Usunięcie podkategorii spowoduje przeniesienie jej transakcji do "Inne". Czy kontynuować?')) {
+      onDeleteSubcategory(catId, subId);
+    }
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100">
         <h2 className="text-xl font-bold text-slate-900 mb-4">Zarządzanie Kategoriami</h2>
-        <p className="text-sm text-slate-500 mb-6">Dodawaj, edytuj i usuwaj kategorie oraz podkategorie.</p>
+        
+        {/* Savings Rate Configuration */}
+        <div className="mb-8 p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+           <h3 className="font-semibold text-indigo-900 mb-2 flex items-center gap-2">
+             <PiggyBank size={18} /> Konfiguracja Stopy Oszczędności
+           </h3>
+           <p className="text-sm text-indigo-700 mb-3">
+             Zaznacz poniżej kategorie wydatków, które mają być traktowane jako oszczędności/inwestycje.
+           </p>
+           <div className="flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                id="includeBalance"
+                checked={includeBalanceInSavings}
+                onChange={(e) => onToggleBalanceInSavings(e.target.checked)}
+                className="w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer bg-white accent-indigo-600"
+                style={{ colorScheme: 'light' }}
+              />
+              <label htmlFor="includeBalance" className="text-sm font-medium text-indigo-900 cursor-pointer select-none">
+                Wliczaj nadwyżkę finansową (Dostępne Środki) do stopy oszczędności
+              </label>
+           </div>
+        </div>
 
         {/* Tabs */}
         <div className="flex bg-slate-100 p-1 rounded-lg w-full max-w-md mb-6">
@@ -138,19 +242,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ categories, onUpdate
                       <Edit2 size={14} />
                     </button>
                   )}
-                  {cat.isSystem ? (
-                    <div className="p-1.5 text-slate-300 cursor-help" title="Kategoria systemowa">
-                      <Lock size={14} />
-                    </div>
-                  ) : (
-                    !editingCatId && (
-                      <button onClick={() => handleDeleteCategory(cat.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded">
-                        <Trash2 size={14} />
-                      </button>
-                    )
+                  {!editingCatId && (
+                    <button onClick={() => confirmDeleteCategory(cat.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded">
+                      <Trash2 size={14} />
+                    </button>
                   )}
                 </div>
               </div>
+              
+              {/* Savings Toggle for Expenses */}
+              {activeTab === TransactionType.EXPENSE && (
+                <div className="px-3 py-2 bg-white border-t border-slate-100 flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      checked={!!cat.isIncludedInSavings}
+                      onChange={() => handleToggleSavingsInclusion(cat.id)}
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer bg-white accent-emerald-600"
+                      style={{ colorScheme: 'light' }}
+                    />
+                    <span className="text-xs text-slate-500">Wliczaj do stopy oszczędności</span>
+                </div>
+              )}
 
               {/* Subcategories */}
               {expandedCategory === cat.id && (
@@ -159,7 +271,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ categories, onUpdate
                     <div key={sub.id} className="flex items-center justify-between text-sm pl-8 pr-2 group">
                       <span className="text-slate-600">{sub.name}</span>
                       <button 
-                        onClick={() => handleDeleteSubcategory(cat.id, sub.id)}
+                        onClick={() => confirmDeleteSubcategory(cat.id, sub.id)}
                         className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
                       >
                         <Trash2 size={12} />
@@ -167,18 +279,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ categories, onUpdate
                     </div>
                   ))}
                   
-                  <div className="pl-8 pt-2 flex items-center gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="Nowa podkategoria..."
-                      className="bg-white border border-slate-200 rounded px-2 py-1 text-xs w-full focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleAddSubcategory(cat.id, e.currentTarget.value);
-                          e.currentTarget.value = '';
-                        }
-                      }}
-                    />
+                  <div className="pl-8 pt-2">
+                    <AddSubcategoryInput onAdd={(name) => handleAddSubcategory(cat.id, name)} />
                   </div>
                 </div>
               )}
@@ -187,7 +289,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ categories, onUpdate
 
           {/* Add New Category Button */}
           {isAddingCat ? (
-            <div className="border border-indigo-200 rounded-xl p-3 bg-indigo-50 flex items-center gap-2">
+            <div className="border border-indigo-200 rounded-xl p-3 bg-indigo-50 flex items-center gap-2 h-[58px]">
               <input 
                 type="color" 
                 value={newCatColor}

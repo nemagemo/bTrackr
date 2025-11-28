@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Wallet, PieChart as PieChartIcon, ArrowDownCircle, ArrowUpCircle, Sparkles, LayoutDashboard, LineChart, History, Settings } from 'lucide-react';
-import { Transaction, TransactionType, CategoryItem } from './types';
+import { Transaction, TransactionType, CategoryItem, SubcategoryItem } from './types';
 import { DEFAULT_CATEGORIES, SYSTEM_IDS, CURRENCY_FORMATTER, getCategoryName } from './constants';
 import { StatCard } from './components/StatCard';
 import { TransactionForm } from './components/TransactionForm';
@@ -28,6 +29,12 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('btrackr_transactions');
     return saved ? JSON.parse(saved) : [];
+  });
+
+  // Settings State
+  const [includeBalanceInSavings, setIncludeBalanceInSavings] = useState<boolean>(() => {
+    const saved = localStorage.getItem('btrackr_cfg_savings_balance');
+    return saved ? JSON.parse(saved) : false;
   });
 
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -59,8 +66,13 @@ const App: React.FC = () => {
     localStorage.setItem('btrackr_categories', JSON.stringify(categories));
   }, [categories]);
 
+  useEffect(() => {
+    localStorage.setItem('btrackr_cfg_savings_balance', JSON.stringify(includeBalanceInSavings));
+  }, [includeBalanceInSavings]);
+
   // Migration Logic
   useEffect(() => {
+    // 1. Migrate legacy ID strings to new default structure if necessary
     const hasLegacyData = transactions.some(t => {
       return !categories.some(c => c.id === t.categoryId);
     });
@@ -88,11 +100,11 @@ const App: React.FC = () => {
         if (t.type === TransactionType.INCOME) {
           acc.totalIncome += t.amount;
         } else {
-          const isNonConsumption = 
-            t.categoryId === SYSTEM_IDS.SAVINGS || 
-            t.categoryId === SYSTEM_IDS.INVESTMENTS;
+          // Identify if it's savings based on the Category Flag
+          const category = categories.find(c => c.id === t.categoryId);
+          const isSavings = category?.isIncludedInSavings || false;
 
-          if (!isNonConsumption) {
+          if (!isSavings) {
             acc.totalExpense += t.amount; 
             acc.totalOutflow += t.amount;
           } else {
@@ -103,9 +115,11 @@ const App: React.FC = () => {
       },
       { totalIncome: 0, totalExpense: 0, totalOutflow: 0, totalTransfers: 0 }
     );
-  }, [transactions]);
+  }, [transactions, categories]);
 
   const balance = summary.totalIncome - summary.totalOutflow - summary.totalTransfers; 
+
+  // --- Handlers ---
 
   const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
     const transaction: Transaction = {
@@ -119,13 +133,13 @@ const App: React.FC = () => {
     setTransactions((prev) => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
   };
 
-  const handleBulkCategoryUpdate = (ids: string[], newCategoryName: string) => {
+  const handleBulkCategoryUpdate = (ids: string[], newCategoryName: string, newSubcategoryId?: string) => {
      let targetId = newCategoryName;
      const match = categories.find(c => c.name === newCategoryName || c.id === newCategoryName);
      if (match) targetId = match.id;
 
      setTransactions(prev => prev.map(t => 
-      ids.includes(t.id) ? { ...t, categoryId: targetId } : t
+      ids.includes(t.id) ? { ...t, categoryId: targetId, subcategoryId: newSubcategoryId || undefined } : t
     ));
   };
 
@@ -177,6 +191,90 @@ const App: React.FC = () => {
     const advice = await getFinancialAdvice(transactions, categories);
     setAiAdvice(advice);
     setIsLoadingAdvice(false);
+  };
+
+  // --- COMPLEX DELETE LOGIC ---
+
+  const handleDeleteSubcategory = (categoryId: string, subcategoryId: string) => {
+    const category = categories.find(c => c.id === categoryId);
+    if (!category) return;
+
+    // 1. Find or Create "Inne" subcategory in the same category
+    let otherSub = category.subcategories.find(s => s.name.toLowerCase() === 'inne' && s.id !== subcategoryId);
+    let newCategories = [...categories];
+
+    if (!otherSub) {
+      // Create 'Inne' if it doesn't exist
+      const newSub: SubcategoryItem = { id: crypto.randomUUID(), name: 'Inne' };
+      newCategories = newCategories.map(c => 
+        c.id === categoryId ? { ...c, subcategories: [...c.subcategories, newSub] } : c
+      );
+      otherSub = newSub;
+    }
+
+    // 2. Move transactions
+    setTransactions(prev => prev.map(t => {
+      if (t.categoryId === categoryId && t.subcategoryId === subcategoryId) {
+        return { ...t, subcategoryId: otherSub!.id };
+      }
+      return t;
+    }));
+
+    // 3. Delete the subcategory
+    setCategories(currentCats => {
+      // We need to use the state-safe update, in case 'Inne' was just created above
+      // But we handled 'newCategories' above. Let's start fresh from newCategories.
+      return newCategories.map(c => 
+        c.id === categoryId ? { ...c, subcategories: c.subcategories.filter(s => s.id !== subcategoryId) } : c
+      );
+    });
+  };
+
+  const handleDeleteCategory = (categoryId: string) => {
+    const categoryToDelete = categories.find(c => c.id === categoryId);
+    if (!categoryToDelete) return;
+
+    // 1. Find target "Inne" category of the same type
+    let targetCat = categories.find(c => 
+      c.type === categoryToDelete.type && 
+      c.id !== categoryId && 
+      c.name.toLowerCase().includes('inne')
+    );
+    
+    let updatedCategories = [...categories];
+    
+    // Create 'Inne' Category if it doesn't exist
+    if (!targetCat) {
+       targetCat = {
+         id: crypto.randomUUID(),
+         name: 'Inne',
+         type: categoryToDelete.type,
+         color: '#64748b',
+         isSystem: false,
+         subcategories: []
+       };
+       updatedCategories.push(targetCat);
+    }
+
+    // 2. Find or Create "Inne" subcategory in target
+    let targetSub = targetCat.subcategories.find(s => s.name.toLowerCase() === 'inne');
+    if (!targetSub) {
+       targetSub = { id: crypto.randomUUID(), name: 'Inne' };
+       targetCat.subcategories = [...targetCat.subcategories, targetSub];
+       // Update reference in list
+       updatedCategories = updatedCategories.map(c => c.id === targetCat!.id ? targetCat! : c);
+    }
+
+    // 3. Move transactions
+    setTransactions(prev => prev.map(t => {
+      if (t.categoryId === categoryId) {
+        return { ...t, categoryId: targetCat!.id, subcategoryId: targetSub!.id };
+      }
+      return t;
+    }));
+
+    // 4. Delete the category
+    setCategories(updatedCategories.filter(c => c.id !== categoryId));
   };
 
   return (
@@ -267,9 +365,26 @@ const App: React.FC = () => {
           </>
         )}
 
-        {activeTab === 'analysis' && <AnalysisView transactions={transactions} categories={categories} />}
+        {activeTab === 'analysis' && (
+          <AnalysisView 
+            transactions={transactions} 
+            categories={categories} 
+            includeBalanceInSavings={includeBalanceInSavings}
+          />
+        )}
+        
         {activeTab === 'history' && <HistoryView transactions={transactions} categories={categories} onEdit={setEditingTransaction} onDelete={requestDeleteTransaction} onClearAll={requestClearAllTransactions} onOpenBulkAction={() => setIsBulkModalOpen(true)} />}
-        {activeTab === 'settings' && <SettingsView categories={categories} onUpdateCategories={setCategories} />}
+        
+        {activeTab === 'settings' && (
+          <SettingsView 
+            categories={categories} 
+            onUpdateCategories={setCategories} 
+            onDeleteCategory={handleDeleteCategory}
+            onDeleteSubcategory={handleDeleteSubcategory}
+            includeBalanceInSavings={includeBalanceInSavings}
+            onToggleBalanceInSavings={setIncludeBalanceInSavings}
+          />
+        )}
       </main>
 
       <ImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} onImport={handleImportTransactions} hasExistingTransactions={transactions.length > 0} categories={categories} />

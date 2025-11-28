@@ -14,7 +14,8 @@ export interface CategoryItem {
   name: string;
   type: TransactionType;
   color: string;
-  isSystem: boolean; // System categories cannot be deleted (e.g. Salary, Savings logic depend on them)
+  isSystem: boolean; // Deprecated in logic, kept for structure compatibility, now false for everyone
+  isIncludedInSavings?: boolean; // New flag for Savings Rate calculation
   subcategories: SubcategoryItem[];
 }
 
