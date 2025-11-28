@@ -1,16 +1,22 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { Transaction, Category } from "../types";
+import { Transaction, CategoryItem } from "../types";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-export const suggestCategory = async (description: string): Promise<string | null> => {
+export const suggestCategory = async (description: string, categories: CategoryItem[]): Promise<string | null> => {
   if (!apiKey) return null;
+
+  // Extract names to send to AI
+  const expenseCategoryNames = categories
+    .filter(c => c.type === 'EXPENSE')
+    .map(c => c.name);
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Categorize this transaction description into strictly one of these categories (return only the category name in Polish): Jedzenie, Transport, Mieszkanie, Opłaty, Rozrywka, Zdrowie, Zakupy, Kredyt, Inwestycje, Przelew własny, Inne. Description: "${description}"`,
+      contents: `Categorize this transaction description into strictly one of these categories: ${expenseCategoryNames.join(', ')}. Return only the category name in Polish. Description: "${description}"`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -18,19 +24,6 @@ export const suggestCategory = async (description: string): Promise<string | nul
           properties: {
             category: {
               type: Type.STRING,
-              enum: [
-                'Jedzenie',
-                'Transport',
-                'Mieszkanie',
-                'Opłaty',
-                'Rozrywka',
-                'Zdrowie',
-                'Zakupy',
-                'Kredyt',
-                'Inwestycje',
-                'Przelew własny',
-                'Inne'
-              ]
             }
           }
         }
@@ -38,18 +31,24 @@ export const suggestCategory = async (description: string): Promise<string | nul
     });
 
     const json = JSON.parse(response.text || '{}');
-    return json.category || Category.OTHER;
+    const suggestedName = json.category;
+
+    // Find ID by Name
+    const matchedCategory = categories.find(c => c.name.toLowerCase() === suggestedName?.toLowerCase());
+    return matchedCategory ? matchedCategory.id : null;
   } catch (error) {
     console.error("Gemini categorization failed:", error);
     return null;
   }
 };
 
-export const getFinancialAdvice = async (transactions: Transaction[]): Promise<string> => {
+export const getFinancialAdvice = async (transactions: Transaction[], categories: CategoryItem[]): Promise<string> => {
   if (!apiKey || transactions.length === 0) return "Dodaj więcej transakcji, aby otrzymać analizę AI.";
 
-  // Simplify data to save tokens
-  const summary = transactions.slice(0, 50).map(t => `${t.date}: ${t.description} (${t.amount} PLN, ${t.type}, ${t.category})`).join('\n');
+  const summary = transactions.slice(0, 50).map(t => {
+    const catName = categories.find(c => c.id === t.categoryId)?.name || 'Nieznana';
+    return `${t.date}: ${t.description} (${t.amount} PLN, ${t.type}, ${catName})`;
+  }).join('\n');
 
   try {
     const response = await ai.models.generateContent({

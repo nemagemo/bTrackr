@@ -1,21 +1,21 @@
+
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE'
 }
 
-export enum Category {
-  FOOD = 'Jedzenie',
-  SHOPPING = 'Zakupy',
-  TRANSPORT = 'Transport',
-  HOUSING = 'Mieszkanie',
-  BILLS = 'Opłaty',
-  ENTERTAINMENT = 'Rozrywka',
-  HEALTH = 'Zdrowie',
-  CREDIT = 'Kredyt',
-  SALARY = 'Wynagrodzenie',
-  INVESTMENTS = 'Inwestycje',
-  INTERNAL_TRANSFER = 'Przelew własny',
-  OTHER = 'Inne'
+export interface SubcategoryItem {
+  id: string;
+  name: string;
+}
+
+export interface CategoryItem {
+  id: string;
+  name: string;
+  type: TransactionType;
+  color: string;
+  isSystem: boolean; // System categories cannot be deleted (e.g. Salary, Savings logic depend on them)
+  subcategories: SubcategoryItem[];
 }
 
 export interface Transaction {
@@ -23,7 +23,8 @@ export interface Transaction {
   amount: number;
   description: string;
   type: TransactionType;
-  category: Category | string;
+  categoryId: string; // References CategoryItem.id
+  subcategoryId?: string; // References SubcategoryItem.id
   date: string;
 }
 

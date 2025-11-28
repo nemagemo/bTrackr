@@ -1,45 +1,72 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Plus, Wand2, Upload } from 'lucide-react';
-import { Category, Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button } from './Button';
 import { suggestCategory } from '../services/geminiService';
 
 interface TransactionFormProps {
   onAdd: (transaction: Omit<Transaction, 'id'>) => void;
   onImportClick?: () => void;
+  categories: CategoryItem[];
 }
 
-export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImportClick }) => {
+export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImportClick, categories }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
-  const [category, setCategory] = useState<string>(Category.OTHER);
+  const [categoryId, setCategoryId] = useState<string>('');
+  const [subcategoryId, setSubcategoryId] = useState<string>('');
   const [isSuggesting, setIsSuggesting] = useState(false);
+
+  const availableCategories = categories.filter(c => c.type === type);
+  const currentCategory = categories.find(c => c.id === categoryId);
+
+  // Set default category when type changes
+  useEffect(() => {
+    if (availableCategories.length > 0) {
+      // Try to find "Salary" for income or "Other" for expense as defaults
+      const defaultName = type === TransactionType.INCOME ? 'Wynagrodzenie' : 'Inne';
+      const defaultCat = availableCategories.find(c => c.name === defaultName) || availableCategories[0];
+      setCategoryId(defaultCat.id);
+      setSubcategoryId('');
+    }
+  }, [type, categories]); // Re-run if categories change
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || !amount) return;
+    if (!description || !amount || !categoryId) return;
 
     onAdd({
       description,
       amount: parseFloat(amount),
       type,
-      category: type === TransactionType.INCOME ? Category.SALARY : category,
+      categoryId,
+      subcategoryId: subcategoryId || undefined,
       date: new Date().toISOString(),
     });
 
     setDescription('');
     setAmount('');
-    setCategory(Category.OTHER);
+    // Reset to default
+    const defaultName = type === TransactionType.INCOME ? 'Wynagrodzenie' : 'Inne';
+    const defaultCat = availableCategories.find(c => c.name === defaultName) || availableCategories[0];
+    setCategoryId(defaultCat?.id || '');
+    setSubcategoryId('');
   };
 
   const handleAiSuggest = async () => {
     if (!description) return;
     setIsSuggesting(true);
-    const suggestion = await suggestCategory(description);
-    if (suggestion) {
-      setCategory(suggestion);
-      setType(TransactionType.EXPENSE); // Usually categorized items are expenses
+    const suggestedId = await suggestCategory(description, categories);
+    
+    if (suggestedId) {
+      const cat = categories.find(c => c.id === suggestedId);
+      if (cat) {
+        setType(cat.type);
+        setCategoryId(cat.id);
+        setSubcategoryId(''); // Reset sub on auto-suggest
+      }
     }
     setIsSuggesting(false);
   };
@@ -90,8 +117,8 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="np. Zakupy w Biedronce"
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+              placeholder={type === TransactionType.INCOME ? "np. Wypłata, Dywidenda" : "np. Zakupy w Biedronce"}
+              className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
               required
             />
             <button
@@ -115,25 +142,43 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
               required
             />
           </div>
           
-          {type === TransactionType.EXPENSE && (
+          <div className="space-y-2">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Kategoria</label>
               <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none"
+                value={categoryId}
+                onChange={(e) => {
+                  setCategoryId(e.target.value);
+                  setSubcategoryId('');
+                }}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none text-slate-900"
               >
-                {Object.values(Category).filter(c => c !== Category.SALARY).map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
+                {availableCategories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
             </div>
-          )}
+
+            {currentCategory && currentCategory.subcategories.length > 0 && (
+              <div className="animate-fade-in">
+                 <select
+                  value={subcategoryId}
+                  onChange={(e) => setSubcategoryId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none text-slate-600"
+                >
+                  <option value="">-- Podkategoria --</option>
+                  {currentCategory.subcategories.map((sub) => (
+                    <option key={sub.id} value={sub.id}>{sub.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
 
         <Button type="submit" className="w-full mt-2">

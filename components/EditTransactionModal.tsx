@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, Trash2 } from 'lucide-react';
-import { Transaction, TransactionType, Category } from '../types';
+import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button } from './Button';
 
 interface EditTransactionModalProps {
@@ -9,6 +10,7 @@ interface EditTransactionModalProps {
   onClose: () => void;
   onSave: (updatedTransaction: Transaction) => void;
   onDelete: (id: string) => void;
+  categories: CategoryItem[];
 }
 
 export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ 
@@ -16,26 +18,42 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   isOpen, 
   onClose, 
   onSave,
-  onDelete
+  onDelete,
+  categories
 }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
   const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
-  const [category, setCategory] = useState<string>(Category.OTHER);
+  const [categoryId, setCategoryId] = useState<string>('');
+  const [subcategoryId, setSubcategoryId] = useState<string>('');
+
+  const availableCategories = categories.filter(c => c.type === type);
+  const currentCategory = categories.find(c => c.id === categoryId);
 
   useEffect(() => {
     if (transaction) {
       setDescription(transaction.description);
       setAmount(transaction.amount.toString());
-      // Convert ISO string to YYYY-MM-DD for input
       const d = new Date(transaction.date);
       const formattedDate = d.toISOString().split('T')[0];
       setDate(formattedDate);
       setType(transaction.type);
-      setCategory(transaction.category);
+      setCategoryId(transaction.categoryId);
+      setSubcategoryId(transaction.subcategoryId || '');
     }
   }, [transaction]);
+
+  useEffect(() => {
+    if (!transaction || !isOpen) return;
+    
+    // Validate if current categoryId is valid for selected type
+    const isValid = availableCategories.some(c => c.id === categoryId);
+    if (!isValid && availableCategories.length > 0) {
+       setCategoryId(availableCategories[0].id);
+       setSubcategoryId('');
+    }
+  }, [type, categories]);
 
   if (!isOpen || !transaction) return null;
 
@@ -48,16 +66,15 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       description,
       amount: parseFloat(amount),
       type,
-      category: type === TransactionType.INCOME ? Category.SALARY : category,
-      date: new Date(date).toISOString(), // Keep time as start of day for simplicity or current time
+      categoryId,
+      subcategoryId: subcategoryId || undefined,
+      date: new Date(date).toISOString(),
     });
     onClose();
   };
 
   const handleDelete = () => {
     onDelete(transaction.id);
-    // Don't close here immediately, let the confirm modal logic in parent decide flow or parent closes this.
-    // In current implementation, parent opens confirm modal on top.
   };
 
   return (
@@ -98,7 +115,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-900"
               required
             />
           </div>
@@ -109,7 +126,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-900"
               required
             />
           </div>
@@ -122,25 +139,43 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-900"
                 required
               />
             </div>
             
-            {type === TransactionType.EXPENSE && (
+            <div className="space-y-2">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Kategoria</label>
                 <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+                  value={categoryId}
+                  onChange={(e) => {
+                     setCategoryId(e.target.value);
+                     setSubcategoryId('');
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-900"
                 >
-                  {Object.values(Category).filter(c => c !== Category.SALARY && c !== Category.INVESTMENTS).map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
+                  {availableCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
               </div>
-            )}
+
+              {currentCategory && currentCategory.subcategories.length > 0 && (
+                <div>
+                   <select
+                    value={subcategoryId}
+                    onChange={(e) => setSubcategoryId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-600"
+                  >
+                    <option value="">-- Podkategoria --</option>
+                    {currentCategory.subcategories.map((sub) => (
+                      <option key={sub.id} value={sub.id}>{sub.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-3 pt-4">

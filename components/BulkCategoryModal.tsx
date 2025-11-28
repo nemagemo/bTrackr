@@ -1,37 +1,51 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Search, Check, Layers, AlertCircle } from 'lucide-react';
-import { Transaction, Category, TransactionType } from '../types';
+import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button } from './Button';
-import { CATEGORY_COLORS, CURRENCY_FORMATTER } from '../constants';
+import { getCategoryColor, getCategoryName, CURRENCY_FORMATTER } from '../constants';
 
 interface BulkCategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   transactions: Transaction[];
-  onUpdate: (ids: string[], newCategory: string) => void;
+  categories: CategoryItem[];
+  onUpdate: (ids: string[], newCategoryId: string) => void;
 }
 
 export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
   isOpen,
   onClose,
   transactions,
+  categories,
   onUpdate,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [targetCategory, setTargetCategory] = useState<string>(Category.FOOD);
+  const [targetCategoryId, setTargetCategoryId] = useState<string>('');
+  const [activeType, setActiveType] = useState<TransactionType>(TransactionType.EXPENSE);
 
-  // Filter transactions based on search term
-  // We exclude Salary/Income generally, or keep them editable? Usually bulk edit is for expenses.
-  // Let's allow all expenses.
+  // Set default category when modal opens or type changes
+  useEffect(() => {
+    if (isOpen) {
+       const cats = categories.filter(c => c.type === activeType);
+       if (cats.length > 0) {
+         setTargetCategoryId(cats[0].id);
+       } else {
+         setTargetCategoryId('');
+       }
+    }
+  }, [isOpen, categories, activeType]);
+
+  // Filter transactions based on search term and active type
   const filteredTransactions = useMemo(() => {
     if (!searchTerm) return [];
     const lowerTerm = searchTerm.toLowerCase();
     return transactions
-      .filter(t => t.type === TransactionType.EXPENSE)
+      .filter(t => t.type === activeType)
       .filter(t => t.description.toLowerCase().includes(lowerTerm))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, searchTerm]);
+  }, [transactions, searchTerm, activeType]);
 
   const handleToggleSelect = (id: string) => {
     const newSelected = new Set(selectedIds);
@@ -45,7 +59,7 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
 
   const handleSelectAllVisible = () => {
     const newSelected = new Set(selectedIds);
-    const allVisibleSelected = filteredTransactions.every(t => selectedIds.has(t.id));
+    const allVisibleSelected = filteredTransactions.length > 0 && filteredTransactions.every(t => selectedIds.has(t.id));
 
     if (allVisibleSelected) {
       // Deselect visible
@@ -59,11 +73,9 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
 
   const handleApply = () => {
     if (selectedIds.size === 0) return;
-    onUpdate(Array.from(selectedIds), targetCategory);
+    onUpdate(Array.from(selectedIds), targetCategoryId);
     
-    // UX: Clear selection but keep search to see result or clear search?
-    // User requested flow: "nie musi się zamykać – możesz wyczyścić szukanie i od razu grupować kolejne"
-    // We clear selection so user can't accidentally apply again to same items easily
+    // Clear selection
     setSelectedIds(new Set());
   };
 
@@ -91,16 +103,35 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
           </button>
         </div>
 
-        {/* Search Bar */}
-        <div className="p-4 bg-slate-50 border-b border-slate-100">
+        {/* Search Bar & Filters */}
+        <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-3">
+          <div className="flex bg-white p-1 rounded-lg border border-slate-200 w-fit">
+            <button
+              onClick={() => setActiveType(TransactionType.EXPENSE)}
+              className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
+                activeType === TransactionType.EXPENSE ? 'bg-red-50 text-red-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              Wydatki
+            </button>
+            <button
+              onClick={() => setActiveType(TransactionType.INCOME)}
+              className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
+                activeType === TransactionType.INCOME ? 'bg-green-50 text-green-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              Przychody
+            </button>
+          </div>
+          
           <div className="relative">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Wpisz frazę aby znaleźć transakcje (np. 'Biedronka', 'Uber')..."
+              placeholder={`Wpisz frazę dla ${activeType === TransactionType.EXPENSE ? 'wydatków' : 'przychodów'}...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm"
+              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm text-slate-900"
               autoFocus
             />
           </div>
@@ -117,7 +148,8 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
                       type="checkbox" 
                       checked={isAllVisibleSelected}
                       onChange={handleSelectAllVisible}
-                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer bg-white accent-indigo-600"
+                      style={{ colorScheme: 'light' }}
                     />
                   </th>
                   <th className="px-4 py-3 font-semibold">Data</th>
@@ -127,38 +159,43 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredTransactions.map((t) => (
-                  <tr key={t.id} className={`transition-colors ${selectedIds.has(t.id) ? 'bg-indigo-50/50 hover:bg-indigo-50' : 'hover:bg-slate-50'}`}>
-                    <td className="px-4 py-3 text-center">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedIds.has(t.id)}
-                        onChange={() => handleToggleSelect(t.id)}
-                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                      {new Date(t.date).toLocaleDateString('pl-PL')}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-slate-800">
-                      {t.description}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span 
-                        className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap"
-                        style={{ 
-                          backgroundColor: `${CATEGORY_COLORS[t.category] || '#94a3b8'}20`,
-                          color: CATEGORY_COLORS[t.category] || '#64748b'
-                        }}
-                      >
-                        {t.category}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-600">
-                      {CURRENCY_FORMATTER.format(t.amount)}
-                    </td>
-                  </tr>
-                ))}
+                {filteredTransactions.map((t) => {
+                  const catColor = getCategoryColor(t.categoryId, categories);
+                  const catName = getCategoryName(t.categoryId, categories);
+                  return (
+                    <tr key={t.id} className={`transition-colors ${selectedIds.has(t.id) ? 'bg-indigo-50/50 hover:bg-indigo-50' : 'hover:bg-slate-50'}`}>
+                      <td className="px-4 py-3 text-center">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedIds.has(t.id)}
+                          onChange={() => handleToggleSelect(t.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer bg-white accent-indigo-600"
+                          style={{ colorScheme: 'light' }}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                        {new Date(t.date).toLocaleDateString('pl-PL')}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {t.description}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span 
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium whitespace-nowrap"
+                          style={{ 
+                            backgroundColor: `${catColor}20`,
+                            color: catColor
+                          }}
+                        >
+                          {catName}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-600">
+                        {CURRENCY_FORMATTER.format(t.amount)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (
@@ -190,12 +227,12 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
           
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <select
-              value={targetCategory}
-              onChange={(e) => setTargetCategory(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer flex-1 sm:flex-none sm:w-48"
+              value={targetCategoryId}
+              onChange={(e) => setTargetCategoryId(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer flex-1 sm:flex-none sm:w-48 text-slate-900"
             >
-              {Object.values(Category).filter(c => c !== Category.SALARY).map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
+              {categories.filter(c => c.type === activeType).map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
             
