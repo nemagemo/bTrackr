@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank } from 'lucide-react';
 import { CategoryItem, SubcategoryItem, TransactionType } from '../types';
+import { ConfirmModal } from './ConfirmModal';
 
 interface SettingsViewProps {
   categories: CategoryItem[];
@@ -98,6 +99,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('#64748b');
 
+  // Confirmation Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    action: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    action: () => {},
+  });
+
   const filteredCategories = categories.filter(c => c.type === activeTab);
 
   const handleAddCategory = () => {
@@ -144,16 +158,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     ));
   };
 
-  const confirmDeleteCategory = (id: string) => {
-    if (confirm('Usunięcie kategorii spowoduje przeniesienie wszystkich jej transakcji do kategorii "Inne". Czy kontynuować?')) {
-      onDeleteCategory(id);
-    }
+  const requestDeleteCategory = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Usuń kategorię',
+      message: 'Usunięcie kategorii spowoduje przeniesienie wszystkich jej transakcji do kategorii "Inne". Czy kontynuować?',
+      action: () => onDeleteCategory(id),
+    });
   };
 
-  const confirmDeleteSubcategory = (catId: string, subId: string) => {
-    if (confirm('Usunięcie podkategorii spowoduje przeniesienie jej transakcji do "Inne". Czy kontynuować?')) {
-      onDeleteSubcategory(catId, subId);
-    }
+  const requestDeleteSubcategory = (catId: string, subId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Usuń podkategorię',
+      message: 'Usunięcie podkategorii spowoduje przeniesienie jej transakcji do "Inne". Czy kontynuować?',
+      action: () => onDeleteSubcategory(catId, subId),
+    });
   };
 
   return (
@@ -243,7 +263,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </button>
                   )}
                   {!editingCatId && (
-                    <button onClick={() => confirmDeleteCategory(cat.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded">
+                    <button onClick={() => requestDeleteCategory(cat.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded">
                       <Trash2 size={14} />
                     </button>
                   )}
@@ -271,7 +291,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div key={sub.id} className="flex items-center justify-between text-sm pl-8 pr-2 group">
                       <span className="text-slate-600">{sub.name}</span>
                       <button 
-                        onClick={() => confirmDeleteSubcategory(cat.id, sub.id)}
+                        onClick={() => requestDeleteSubcategory(cat.id, sub.id)}
                         className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
                       >
                         <Trash2 size={12} />
@@ -317,6 +337,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
         </div>
       </div>
+      
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen} 
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} 
+        onConfirm={() => { confirmModal.action(); setConfirmModal(prev => ({ ...prev, isOpen: false })); }} 
+        title={confirmModal.title} 
+        message={confirmModal.message} 
+      />
     </div>
   );
 };

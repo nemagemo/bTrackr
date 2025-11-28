@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
-import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers, Trash2, FilePlus, AlertTriangle, Link } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers, Trash2, FilePlus, AlertTriangle, Link, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from './Button';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { KEYWORD_TO_CATEGORY_NAME } from '../constants';
@@ -498,6 +498,57 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     onClose();
   };
 
+  const renderConflictList = (items: ConflictItem[]) => {
+    return items.map((conflict, i) => {
+        const key = `${conflict.fileCategory}:::${conflict.fileSubcategory || ''}`;
+        const currentMap = reconciliationMap[key] || {};
+        const relevantCategories = categories.filter(c => c.type === conflict.type);
+        const selectedCat = categories.find(c => c.id === currentMap.targetCategoryId);
+
+        return (
+          <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-3">
+             <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-slate-700">
+                   <div className="font-bold">{conflict.fileCategory}</div>
+                   {conflict.fileSubcategory && (
+                     <>
+                       <ArrowRight size={14} className="text-slate-400" />
+                       <div className="font-medium">{conflict.fileSubcategory}</div>
+                     </>
+                   )}
+                   <div className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 ml-2">
+                      {conflict.count} transakcji
+                   </div>
+                </div>
+                <Link size={16} className="text-slate-300" />
+             </div>
+
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select
+                  value={currentMap.targetCategoryId || ''}
+                  onChange={(e) => handleReconciliationUpdate(key, e.target.value, '')}
+                  className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 text-slate-900"
+                >
+                   <option value="">-- Wybierz kategorię --</option>
+                   {relevantCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+
+                {selectedCat && selectedCat.subcategories.length > 0 && (
+                   <select
+                    value={currentMap.targetSubcategoryId || ''}
+                    onChange={(e) => handleReconciliationUpdate(key, currentMap.targetCategoryId, e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 text-slate-900"
+                   >
+                     <option value="">-- Podkategoria (Opcjonalnie) --</option>
+                     {selectedCat.subcategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                   </select>
+                )}
+             </div>
+          </div>
+        );
+     });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -541,55 +592,30 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                  </div>
               </div>
 
-              <div className="space-y-3">
-                 {conflicts.map((conflict, i) => {
-                    const key = `${conflict.fileCategory}:::${conflict.fileSubcategory || ''}`;
-                    const currentMap = reconciliationMap[key] || {};
-                    const relevantCategories = categories.filter(c => c.type === conflict.type);
-                    const selectedCat = categories.find(c => c.id === currentMap.targetCategoryId);
+              <div className="space-y-6">
+                {/* Income Section */}
+                {conflicts.some(c => c.type === TransactionType.INCOME) && (
+                  <div>
+                    <h3 className="text-sm font-bold text-green-700 bg-green-50 p-2 rounded mb-3 flex items-center gap-2">
+                       <TrendingUp size={16} /> Przychody
+                    </h3>
+                    <div className="space-y-3">
+                      {renderConflictList(conflicts.filter(c => c.type === TransactionType.INCOME))}
+                    </div>
+                  </div>
+                )}
 
-                    return (
-                      <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                         <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2 text-slate-700">
-                               <div className="font-bold">{conflict.fileCategory}</div>
-                               {conflict.fileSubcategory && (
-                                 <>
-                                   <ArrowRight size={14} className="text-slate-400" />
-                                   <div className="font-medium">{conflict.fileSubcategory}</div>
-                                 </>
-                               )}
-                               <div className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 ml-2">
-                                  {conflict.count} transakcji
-                               </div>
-                            </div>
-                            <Link size={16} className="text-slate-300" />
-                         </div>
-
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <select
-                              value={currentMap.targetCategoryId || ''}
-                              onChange={(e) => handleReconciliationUpdate(key, e.target.value, '')}
-                              className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 text-slate-900"
-                            >
-                               <option value="">-- Wybierz kategorię --</option>
-                               {relevantCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-
-                            {selectedCat && selectedCat.subcategories.length > 0 && (
-                               <select
-                                value={currentMap.targetSubcategoryId || ''}
-                                onChange={(e) => handleReconciliationUpdate(key, currentMap.targetCategoryId, e.target.value)}
-                                className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 text-slate-900"
-                               >
-                                 <option value="">-- Podkategoria (Opcjonalnie) --</option>
-                                 {selectedCat.subcategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                               </select>
-                            )}
-                         </div>
-                      </div>
-                    );
-                 })}
+                {/* Expense Section */}
+                {conflicts.some(c => c.type === TransactionType.EXPENSE) && (
+                  <div>
+                    <h3 className="text-sm font-bold text-red-700 bg-red-50 p-2 rounded mb-3 flex items-center gap-2">
+                       <TrendingDown size={16} /> Wydatki
+                    </h3>
+                    <div className="space-y-3">
+                      {renderConflictList(conflicts.filter(c => c.type === TransactionType.EXPENSE))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
