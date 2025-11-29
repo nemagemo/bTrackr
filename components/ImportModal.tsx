@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
-import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers, Trash2, FilePlus, AlertTriangle, Link, TrendingUp, TrendingDown } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers, Trash2, FilePlus, AlertTriangle, Link, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
 import { Button } from './Button';
-import { Transaction, TransactionType, CategoryItem } from '../types';
+import { Transaction, TransactionType, CategoryItem, SubcategoryItem } from '../types';
 import { KEYWORD_TO_CATEGORY_NAME } from '../constants';
 
 interface ImportModalProps {
@@ -23,6 +23,7 @@ interface GroupedTransaction {
   count: number;
   ids: string[];
   currentCategoryName: string; // Used for UI
+  currentSubcategoryName: string; // Used for UI
   enabled: boolean;
 }
 
@@ -196,6 +197,45 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     return Array.from(conflictMap.values());
   };
 
+  const findSuggestion = (conflict: ConflictItem) => {
+    const fileCat = conflict.fileCategory.toLowerCase();
+    const fileSub = conflict.fileSubcategory?.toLowerCase();
+    const relevantCats = categories.filter(c => c.type === conflict.type);
+
+    // Strategy 1: Match Category Name (Exact or Fuzzy)
+    // Sort by name length desc to prefer longer matches (e.g. "Dom i Rachunki" over "Dom")
+    const sortedCats = [...relevantCats].sort((a, b) => b.name.length - a.name.length);
+    
+    let bestCat = sortedCats.find(c => c.name.toLowerCase() === fileCat); // Exact
+    if (!bestCat) bestCat = sortedCats.find(c => fileCat.includes(c.name.toLowerCase())); // Contains
+    if (!bestCat) bestCat = sortedCats.find(c => c.name.toLowerCase().includes(fileCat)); // Is Contained
+
+    let bestSub: SubcategoryItem | undefined;
+
+    if (bestCat) {
+        // Try to find subcategory match
+        if (fileSub) {
+             bestSub = bestCat.subcategories.find(s => s.name.toLowerCase() === fileSub); // Exact
+             if (!bestSub) bestSub = bestCat.subcategories.find(s => fileSub.includes(s.name.toLowerCase())); // Fuzzy
+        }
+        return { category: bestCat, subcategory: bestSub };
+    }
+
+    // Strategy 2: If Category didn't match, maybe the File Category Name matches a Subcategory in App?
+    // e.g. CSV Category: "Kino/Kultura" -> App Subcategory: "Kino" (under "Rozrywka")
+    for (const cat of relevantCats) {
+        const matchSub = cat.subcategories.find(s => 
+            s.name.toLowerCase() === fileCat || 
+            fileCat.includes(s.name.toLowerCase())
+        );
+        if (matchSub) {
+            return { category: cat, subcategory: matchSub };
+        }
+    }
+
+    return null;
+  };
+
   const handleReconciliationUpdate = (key: string, catId: string, subId?: string) => {
     setReconciliationMap(prev => ({
       ...prev,
@@ -208,8 +248,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     const conflictKeys = conflicts.map(c => `${c.fileCategory}:::${c.fileSubcategory || ''}`);
     const resolvedKeys = Object.keys(reconciliationMap);
     
-    // Simple check: do we have a mapping for every conflict?
-    // (Actually, user might map multiple conflicts to same place, but keys must exist)
     const allResolved = conflictKeys.every(k => resolvedKeys.includes(k) && reconciliationMap[k].targetCategoryId);
 
     if (!allResolved) {
@@ -383,12 +421,16 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       }
     });
     return Object.entries(groups).map(([s, d]) => ({
-      signature: s, example: d.example, count: d.count, ids: d.ids, currentCategoryName: 'Inne', enabled: true
+      signature: s, example: d.example, count: d.count, ids: d.ids, currentCategoryName: 'Inne', currentSubcategoryName: 'Inne', enabled: true
     })).filter(g => g.count > 1).sort((a, b) => b.count - a.count);
   };
 
-  const handleUpdateGroup = (sig: string, catName: string) => {
-    setDetectedGroups(prev => prev.map(g => g.signature === sig ? { ...g, currentCategoryName: catName } : g));
+  const handleUpdateGroupCategory = (sig: string, catName: string) => {
+    setDetectedGroups(prev => prev.map(g => g.signature === sig ? { ...g, currentCategoryName: catName, currentSubcategoryName: 'Inne' } : g));
+  };
+  
+  const handleUpdateGroupSubcategory = (sig: string, subName: string) => {
+    setDetectedGroups(prev => prev.map(g => g.signature === sig ? { ...g, currentSubcategoryName: subName } : g));
   };
   
   const toggleGroup = (sig: string) => {
@@ -399,14 +441,46 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     // Phase 1: Group Updates (for raw CSV import)
     let processedItems = items.map(item => {
       const group = detectedGroups.find(g => g.ids.includes(item.id));
-      if (group && group.enabled) return { ...item, categoryName: group.currentCategoryName };
+      if (group && group.enabled) {
+         return { 
+           ...item, 
+           categoryName: group.currentCategoryName,
+           subcategoryName: group.currentSubcategoryName 
+         };
+      }
       return item;
     });
 
     const finalTransactions: Transaction[] = [];
     const createdCategories: CategoryItem[] = [];
     const currentCategoriesMap = new Map<string, CategoryItem>(categories.map(c => [c.name.toLowerCase(), c]));
-    const batchCreatedMap = new Map<string, CategoryItem>();
+    // Map to track modified existing categories or new batch categories
+    const categoriesToSave = new Map<string, CategoryItem>();
+
+    const getMutableCategory = (name: string, type: TransactionType): CategoryItem => {
+        const lower = name.toLowerCase();
+        let cat = categoriesToSave.get(lower);
+        if (cat) return cat;
+
+        const existing = currentCategoriesMap.get(lower);
+        if (existing) {
+           // Clone if not already in save map
+           cat = { ...existing, subcategories: [...existing.subcategories] };
+        } else {
+           // Create new
+           cat = {
+            id: crypto.randomUUID(),
+            name: name,
+            type: type,
+            color: '#64748b',
+            isSystem: false,
+            subcategories: [{ id: crypto.randomUUID(), name: 'Inne' }]
+           };
+        }
+        categoriesToSave.set(lower, cat);
+        categoriesToSave.set(cat.id, cat); // Index by ID as well for safety
+        return cat;
+    };
 
     processedItems.forEach(item => {
       let categoryId = '';
@@ -421,54 +495,70 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
         if (mapping) {
           categoryId = mapping.targetCategoryId;
           subcategoryId = mapping.targetSubcategoryId;
+          
+          // Ensure subcategory exists (if user mapped to a category but missed subcategory)
+          if (!subcategoryId) {
+             const catObj = categories.find(c => c.id === categoryId);
+             if (catObj) {
+                // We might need to modify this existing category to add 'Inne'
+                // Check if we already modified it
+                let mutable = categoriesToSave.get(catObj.name.toLowerCase());
+                if (!mutable) mutable = { ...catObj, subcategories: [...catObj.subcategories] };
+                
+                const inne = mutable.subcategories.find(s => s.name.toLowerCase() === 'inne');
+                if (inne) {
+                   subcategoryId = inne.id;
+                } else {
+                   const newSub = { id: crypto.randomUUID(), name: 'Inne' };
+                   mutable.subcategories.push(newSub);
+                   subcategoryId = newSub.id;
+                   categoriesToSave.set(mutable.name.toLowerCase(), mutable);
+                }
+             }
+          }
         } else {
           // Direct match expected
-          const matchedCat = currentCategoriesMap.get(item.categoryName.toLowerCase());
-          if (matchedCat) {
-             categoryId = matchedCat.id;
-             if (item.subcategoryName) {
-                const matchedSub = matchedCat.subcategories.find(s => s.name.toLowerCase() === item.subcategoryName.toLowerCase());
-                if (matchedSub) subcategoryId = matchedSub.id;
+          let matchedCat = getMutableCategory(item.categoryName, item.type);
+          categoryId = matchedCat.id;
+
+          if (item.subcategoryName) {
+             const subName = item.subcategoryName;
+             const existingSub = matchedCat.subcategories.find(s => s.name.toLowerCase() === subName.toLowerCase());
+             if (existingSub) {
+                subcategoryId = existingSub.id;
+             } else {
+                const newSub = { id: crypto.randomUUID(), name: subName };
+                matchedCat.subcategories.push(newSub);
+                subcategoryId = newSub.id;
              }
           } else {
-             // Fallback for unexpected case (should have been caught in reconcile)
-             // Just map to Inne
-             // We can pick first category of type
-             const fallback = categories.find(c => c.type === item.type);
-             if (fallback) categoryId = fallback.id;
+             // Default to Inne
+             const existingSub = matchedCat.subcategories.find(s => s.name.toLowerCase() === 'inne');
+             if (existingSub) {
+                subcategoryId = existingSub.id;
+             } else {
+                const newSub = { id: crypto.randomUUID(), name: 'Inne' };
+                matchedCat.subcategories.push(newSub);
+                subcategoryId = newSub.id;
+             }
           }
         }
       } else {
         // Raw CSV: Auto-create Logic
         const catName = item.categoryName || 'Inne';
-        const catNameLower = catName.toLowerCase();
         
-        let matchedCat = currentCategoriesMap.get(catNameLower) || batchCreatedMap.get(catNameLower);
+        let matchedCat = getMutableCategory(catName, item.type);
+        categoryId = matchedCat.id;
 
-        if (!matchedCat) {
-          matchedCat = {
-            id: crypto.randomUUID(),
-            name: catName,
-            type: item.type,
-            color: '#64748b',
-            isSystem: false,
-            subcategories: [{ id: crypto.randomUUID(), name: 'Inne' }]
-          };
-          batchCreatedMap.set(catNameLower, matchedCat);
-          createdCategories.push(matchedCat);
-        }
-        categoryId = matchedCat!.id;
-
-        if (item.subcategoryName) {
-          const subName = item.subcategoryName;
-          const existingSub = matchedCat!.subcategories.find(s => s.name.toLowerCase() === subName.toLowerCase());
-          if (existingSub) {
-            subcategoryId = existingSub.id;
-          } else {
-            const newSub = { id: crypto.randomUUID(), name: subName };
-            matchedCat!.subcategories.push(newSub);
-            subcategoryId = newSub.id;
-          }
+        const subName = item.subcategoryName || 'Inne';
+        const existingSub = matchedCat.subcategories.find(s => s.name.toLowerCase() === subName.toLowerCase());
+        
+        if (existingSub) {
+          subcategoryId = existingSub.id;
+        } else {
+          const newSub = { id: crypto.randomUUID(), name: subName };
+          matchedCat.subcategories.push(newSub);
+          subcategoryId = newSub.id;
         }
       }
 
@@ -483,7 +573,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       });
     });
 
-    onImport(finalTransactions, clearHistory, createdCategories);
+    onImport(finalTransactions, clearHistory, Array.from(categoriesToSave.values()));
     handleClose();
   };
 
@@ -505,18 +595,34 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
         const relevantCategories = categories.filter(c => c.type === conflict.type);
         const selectedCat = categories.find(c => c.id === currentMap.targetCategoryId);
 
+        // Smart Suggestion Logic
+        const suggestion = findSuggestion(conflict);
+
         return (
           <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-3">
              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-slate-700">
-                   <div className="font-bold">{conflict.fileCategory}</div>
+                <div className="flex flex-col gap-1 text-slate-700">
+                   <div className="flex items-center gap-2">
+                     <div className="font-bold">{conflict.fileCategory}</div>
+                     {suggestion && (
+                       <button
+                         onClick={() => handleReconciliationUpdate(key, suggestion.category.id, suggestion.subcategory?.id)}
+                         className="text-[11px] font-semibold bg-indigo-600 text-white px-3 py-1 rounded-full flex items-center gap-1.5 hover:bg-indigo-700 transition-colors shadow-sm ml-2"
+                         title="Kliknij, aby przypisać automatycznie"
+                       >
+                         <Sparkles size={12} fill="currentColor" /> 
+                         Przypisz: {suggestion.category.name} {suggestion.subcategory ? `> ${suggestion.subcategory.name}` : ''}
+                       </button>
+                     )}
+                   </div>
+                   
                    {conflict.fileSubcategory && (
-                     <>
+                     <div className="flex items-center gap-2 text-sm">
                        <ArrowRight size={14} className="text-slate-400" />
                        <div className="font-medium">{conflict.fileSubcategory}</div>
-                     </>
+                     </div>
                    )}
-                   <div className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 ml-2">
+                   <div className="text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500 w-fit mt-1">
                       {conflict.count} transakcji
                    </div>
                 </div>
@@ -683,7 +789,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
           )}
           {step === 'GROUP' && (
             <div className="space-y-2">
-              {detectedGroups.map((g, i) => (
+              {detectedGroups.map((g, i) => {
+                 const selectedCatObject = categories.find(c => c.name === g.currentCategoryName && c.type === TransactionType.EXPENSE);
+                 return (
                  <div key={i} className="flex items-center gap-4 bg-white p-3 rounded border">
                     <input 
                       type="checkbox" 
@@ -696,16 +804,27 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                       <div className="font-bold">{g.example}</div>
                       <div className="text-xs text-slate-400">({g.count} items)</div>
                     </div>
-                    <select 
-                      value={g.currentCategoryName} 
-                      onChange={(e)=>handleUpdateGroup(g.signature, e.target.value)} 
-                      disabled={!g.enabled} 
-                      className="border p-2 rounded bg-white text-slate-900 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    >
-                       {categories.filter(c => c.type === TransactionType.EXPENSE).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                    </select>
+                    <div className="flex gap-2">
+                      <select 
+                        value={g.currentCategoryName} 
+                        onChange={(e)=>handleUpdateGroupCategory(g.signature, e.target.value)} 
+                        disabled={!g.enabled} 
+                        className="border p-2 rounded bg-white text-slate-900 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none w-48"
+                      >
+                         {categories.filter(c => c.type === TransactionType.EXPENSE).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      </select>
+                      
+                      <select 
+                        value={g.currentSubcategoryName} 
+                        onChange={(e)=>handleUpdateGroupSubcategory(g.signature, e.target.value)} 
+                        disabled={!g.enabled || !selectedCatObject} 
+                        className="border p-2 rounded bg-white text-slate-900 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none w-40"
+                      >
+                         {selectedCatObject?.subcategories.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                      </select>
+                    </div>
                  </div>
-              ))}
+              )})}
             </div>
           )}
         </div>

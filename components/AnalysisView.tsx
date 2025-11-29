@@ -5,6 +5,7 @@ import { Filter, History, AlertCircle } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER, SYSTEM_IDS } from '../constants';
 import { SankeyDiagram } from './SankeyDiagram';
+import { CategoryTrendAnalysis } from './CategoryTrendAnalysis';
 
 interface AnalysisViewProps {
   transactions: Transaction[];
@@ -139,8 +140,11 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div className="flex justify-between mb-6">
-          <h3 className="font-semibold text-slate-800">Przepływ środków</h3>
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex flex-col gap-1">
+            <h3 className="font-semibold text-slate-800">Przepływ środków</h3>
+            <p className="text-xs font-normal text-slate-400">Kliknij kategorię wydatków, aby zobaczyć szczegóły</p>
+          </div>
           <div className="flex bg-slate-50 p-1 rounded-lg">
             <button onClick={()=>setSankeyScope('ALL')} className={`px-3 py-1.5 text-xs font-medium rounded-md ${sankeyScope==='ALL'?'bg-white shadow-sm':'text-slate-500'}`}>Cała historia</button>
             <button onClick={()=>setSankeyScope('FILTERED')} className={`px-3 py-1.5 text-xs font-medium rounded-md ${sankeyScope==='FILTERED'?'bg-white shadow-sm ring-1 ring-indigo-200 text-indigo-700':'text-slate-500'}`}>Wybrany okres</button>
@@ -148,6 +152,9 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
         </div>
         <SankeyDiagram transactions={sankeyTransactions} categories={categories} />
       </div>
+
+      {/* NEW: Category Trend Analysis */}
+      <CategoryTrendAnalysis transactions={transactions} categories={categories} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-100"><h3 className="font-semibold mb-6">Przychody vs Wydatki</h3><div className="h-64"><ResponsiveContainer><BarChart data={monthlyData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="displayDate" fontSize={10}/><YAxis fontSize={10}/><Tooltip formatter={(v:number)=>CURRENCY_FORMATTER.format(v)}/><Bar dataKey="income" fill="#22c55e" radius={[4,4,0,0]}/><Bar dataKey="expense" fill="#ef4444" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div></div>

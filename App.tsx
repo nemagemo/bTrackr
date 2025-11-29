@@ -72,27 +72,89 @@ const App: React.FC = () => {
 
   // Migration Logic
   useEffect(() => {
-    // 1. Migrate legacy ID strings to new default structure if necessary
-    const hasLegacyData = transactions.some(t => {
-      return !categories.some(c => c.id === t.categoryId);
-    });
+    const performMigration = () => {
+       // 1. Detect Legacy 'Zobowiązania i Inne' category
+       const oldLiabilityCat = categories.find(c => c.id === 'cat_liabilities');
 
-    if (hasLegacyData && transactions.length > 0) {
-      console.log("Migrating legacy data...");
-      const migrated = transactions.map(t => {
-        if (categories.some(c => c.id === t.categoryId)) return t;
-        const legacyName = (t as any).category || t.categoryId; 
-        const match = categories.find(c => c.name === legacyName);
-        if (match) {
-           return { ...t, categoryId: match.id };
-        }
-        const otherId = t.type === TransactionType.INCOME ? SYSTEM_IDS.OTHER_INCOME : SYSTEM_IDS.OTHER_EXPENSE;
-        const fallback = categories.find(c => c.id === otherId);
-        return { ...t, categoryId: fallback ? fallback.id : categories[0].id };
-      });
-      setTransactions(migrated);
-    }
-  }, []);
+       if (oldLiabilityCat) {
+          console.log("Migrating 'Zobowiązania i Inne' structure...");
+
+          // Helper to create category if missing
+          const newCatsToCreate: CategoryItem[] = [];
+          const createCatIfMissing = (id: string, name: string, color: string, subNames: string[]) => {
+             if (!categories.some(c => c.id === id)) {
+                newCatsToCreate.push({
+                   id, name, type: TransactionType.EXPENSE, color, isSystem: false, isIncludedInSavings: false,
+                   subcategories: subNames.map(s => ({ id: crypto.randomUUID(), name: s }))
+                });
+             }
+          };
+
+          createCatIfMissing(SYSTEM_IDS.INTERNAL_TRANSFER, 'Przelew własny', '#0ea5e9', ['Inne']);
+          createCatIfMissing('cat_insurance', 'Ubezpieczenia', '#db2777', ['Ubezpieczenie na życie', 'Ubezpieczenie podróżne', 'Ubezpieczenie auta', 'Ubezpieczenie domu', 'Inne']);
+          createCatIfMissing('cat_loans', 'Zobowiązania', '#7f1d1d', ['Kredyt hipoteczny', 'Kredyt konsumpcyjny', 'Pożyczka', 'Inne']);
+          createCatIfMissing(SYSTEM_IDS.OTHER_EXPENSE, 'Inne', '#94a3b8', ['Inne']);
+
+          // Combine current + new
+          let updatedCategories = [...categories, ...newCatsToCreate];
+
+          // Helper to find valid sub ID in the new structure
+          const getTargetSubId = (catId: string, subNameToCheck: string) => {
+             const cat = updatedCategories.find(c => c.id === catId);
+             if (!cat) return '';
+             const sub = cat.subcategories.find(s => s.name.toLowerCase() === subNameToCheck.toLowerCase());
+             if (sub) return sub.id;
+             // Fallback to 'Inne'
+             const inne = cat.subcategories.find(s => s.name.toLowerCase() === 'inne');
+             return inne ? inne.id : (cat.subcategories[0]?.id || '');
+          };
+
+          // Migrate Transactions
+          const updatedTransactions = transactions.map(t => {
+             if (t.categoryId === 'cat_liabilities') {
+                const oldSub = oldLiabilityCat.subcategories.find(s => s.id === t.subcategoryId);
+                const oldSubName = oldSub ? oldSub.name.toLowerCase() : 'inne';
+
+                let targetCatId = 'cat_loans'; // Default to Zobowiązania
+                let targetSubName = 'Inne';
+
+                if (oldSubName.includes('ubezpiecz')) {
+                   targetCatId = 'cat_insurance';
+                   if (oldSubName.includes('auto')) targetSubName = 'Ubezpieczenie auta';
+                   else if (oldSubName.includes('dom')) targetSubName = 'Ubezpieczenie domu';
+                   else if (oldSubName.includes('życie')) targetSubName = 'Ubezpieczenie na życie';
+                   else if (oldSubName.includes('podróż')) targetSubName = 'Ubezpieczenie podróżne';
+                } else if (oldSubName.includes('przelew')) {
+                   targetCatId = SYSTEM_IDS.INTERNAL_TRANSFER;
+                } else if (oldSubName === 'inne' || oldSubName === 'zobowiązania i inne') {
+                   targetCatId = SYSTEM_IDS.OTHER_EXPENSE;
+                } else {
+                   // Loans logic
+                   targetCatId = 'cat_loans';
+                   if (oldSubName.includes('hipote')) targetSubName = 'Kredyt hipoteczny';
+                   else if (oldSubName.includes('konsump')) targetSubName = 'Kredyt konsumpcyjny';
+                   else if (oldSubName.includes('pożycz')) targetSubName = 'Pożyczka';
+                }
+
+                return {
+                   ...t,
+                   categoryId: targetCatId,
+                   subcategoryId: getTargetSubId(targetCatId, targetSubName)
+                };
+             }
+             return t;
+          });
+
+          // Remove old category
+          updatedCategories = updatedCategories.filter(c => c.id !== 'cat_liabilities');
+
+          setCategories(updatedCategories);
+          setTransactions(updatedTransactions);
+       }
+    };
+
+    performMigration();
+  }, [categories, transactions]);
 
   const summary = useMemo(() => {
     return transactions.reduce(
@@ -121,16 +183,41 @@ const App: React.FC = () => {
 
   // --- Handlers ---
 
+  const ensureSubcategory = (categoryId: string, providedSubId?: string): string => {
+    if (providedSubId) return providedSubId;
+
+    const category = categories.find(c => c.id === categoryId);
+    if (!category) return ''; 
+
+    const inneSub = category.subcategories.find(s => s.name.toLowerCase() === 'inne');
+    if (inneSub) return inneSub.id;
+
+    // Create Inne if not exists
+    const newSubId = crypto.randomUUID();
+    const newSub: SubcategoryItem = { id: newSubId, name: 'Inne' };
+    
+    // Update State immediately
+    setCategories(prev => prev.map(c => 
+      c.id === categoryId ? { ...c, subcategories: [...c.subcategories, newSub] } : c
+    ));
+    
+    return newSubId;
+  };
+
   const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
+    const subId = ensureSubcategory(newTx.categoryId, newTx.subcategoryId);
     const transaction: Transaction = {
       ...newTx,
+      subcategoryId: subId,
       id: crypto.randomUUID(),
     };
     setTransactions((prev) => [transaction, ...prev]);
   };
 
   const handleUpdateTransaction = (updatedTx: Transaction) => {
-    setTransactions((prev) => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+    const subId = ensureSubcategory(updatedTx.categoryId, updatedTx.subcategoryId);
+    const finalTx = { ...updatedTx, subcategoryId: subId };
+    setTransactions((prev) => prev.map(t => t.id === updatedTx.id ? finalTx : t));
   };
 
   const handleBulkCategoryUpdate = (ids: string[], newCategoryName: string, newSubcategoryId?: string) => {
@@ -138,14 +225,22 @@ const App: React.FC = () => {
      const match = categories.find(c => c.name === newCategoryName || c.id === newCategoryName);
      if (match) targetId = match.id;
 
+     // Ensure subcategory exists (or create Inne)
+     const finalSubId = ensureSubcategory(targetId, newSubcategoryId);
+
      setTransactions(prev => prev.map(t => 
-      ids.includes(t.id) ? { ...t, categoryId: targetId, subcategoryId: newSubcategoryId || undefined } : t
+      ids.includes(t.id) ? { ...t, categoryId: targetId, subcategoryId: finalSubId } : t
     ));
   };
 
-  const handleImportTransactions = (importedTxs: Transaction[], clearHistory: boolean, newCategories?: CategoryItem[]) => {
-    if (newCategories && newCategories.length > 0) {
-      setCategories(prev => [...prev, ...newCategories]);
+  const handleImportTransactions = (importedTxs: Transaction[], clearHistory: boolean, categoriesToMerge?: CategoryItem[]) => {
+    if (categoriesToMerge && categoriesToMerge.length > 0) {
+      setCategories(prev => {
+        const prevMap = new Map(prev.map(c => [c.id, c]));
+        // Merge updates
+        categoriesToMerge.forEach(c => prevMap.set(c.id, c));
+        return Array.from(prevMap.values());
+      });
     }
     
     if (clearHistory) {
