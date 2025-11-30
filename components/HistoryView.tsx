@@ -1,8 +1,8 @@
-
 import React, { useState, useMemo } from 'react';
-import { Search, TrendingUp, TrendingDown, Edit2, Trash2, ListChecks, ArrowUp, ArrowDown, ArrowUpDown, Download } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Edit2, Trash2, ListChecks, ArrowUp, ArrowDown, ArrowUpDown, Download, Scissors } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER, getCategoryColor, getCategoryName } from '../constants';
+import { SplitTransactionModal } from './SplitTransactionModal';
 
 interface HistoryViewProps {
   transactions: Transaction[];
@@ -11,16 +11,20 @@ interface HistoryViewProps {
   onDelete: (id: string) => void;
   onClearAll: () => void;
   onOpenBulkAction?: () => void;
+  onSplit?: (originalId: string, newTransactions: Omit<Transaction, 'id'>[]) => void;
+  isPrivateMode?: boolean;
 }
 
 type SortKey = 'date' | 'amount';
 type SortDirection = 'asc' | 'desc';
 
-export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categories, onEdit, onDelete, onClearAll, onOpenBulkAction }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categories, onEdit, onDelete, onClearAll, onOpenBulkAction, onSplit, isPrivateMode }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategoryId, setFilterCategoryId] = useState<string>('ALL');
   const [filterType, setFilterType] = useState<string>('ALL');
   
+  const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
+
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
     key: 'date',
     direction: 'desc'
@@ -208,7 +212,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
                     Kwota {getSortIcon('amount')}
                   </div>
                 </th>
-                <th className="px-2 py-3 font-semibold text-slate-500 text-center w-20">Akcje</th>
+                <th className="px-2 py-3 font-semibold text-slate-500 text-center w-28">Akcje</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -252,11 +256,20 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
                           )}
                         </div>
                       </td>
-                      <td className={`px-6 py-4 text-right font-semibold whitespace-nowrap ${t.type === TransactionType.INCOME ? 'text-green-600' : 'text-slate-800'}`}>
+                      <td className={`px-6 py-4 text-right font-semibold whitespace-nowrap ${t.type === TransactionType.INCOME ? 'text-green-600' : 'text-slate-800'} ${isPrivateMode ? 'blur-[5px] select-none' : ''}`}>
                         {t.type === TransactionType.INCOME ? '+' : '-'}{CURRENCY_FORMATTER.format(t.amount)}
                       </td>
                       <td className="px-2 py-4 text-center">
                         <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {onSplit && (
+                             <button
+                               onClick={() => setSplittingTransaction(t)}
+                               className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
+                               title="Podziel transakcję"
+                             >
+                                <Scissors size={16} />
+                             </button>
+                          )}
                           <button 
                             onClick={() => onEdit(t)}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -287,6 +300,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
           </table>
         </div>
       </div>
+
+      <SplitTransactionModal 
+        isOpen={!!splittingTransaction}
+        originalTransaction={splittingTransaction}
+        onClose={() => setSplittingTransaction(null)}
+        categories={categories}
+        onConfirm={onSplit || (() => {})}
+      />
     </div>
   );
 };

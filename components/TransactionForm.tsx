@@ -14,6 +14,7 @@ interface TransactionFormProps {
 export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImportClick, categories }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
   const [categoryId, setCategoryId] = useState<string>('');
   const [subcategoryId, setSubcategoryId] = useState<string>('');
@@ -35,7 +36,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || !amount || !categoryId) return;
+    if (!description || !amount || !categoryId || !date) return;
 
     onAdd({
       description,
@@ -43,11 +44,12 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
       type,
       categoryId,
       subcategoryId: subcategoryId || undefined,
-      date: new Date().toISOString(),
+      date: new Date(date).toISOString(),
     });
 
     setDescription('');
     setAmount('');
+    setDate(new Date().toISOString().split('T')[0]);
     // Reset to default
     const defaultName = type === TransactionType.INCOME ? 'Wynagrodzenie' : 'Inne';
     const defaultCat = availableCategories.find(c => c.name === defaultName) || availableCategories[0];
@@ -133,8 +135,18 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Data</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
+              required
+            />
+          </div>
+          <div className="col-span-2">
             <label className="block text-xs font-medium text-slate-500 mb-1">Kwota (PLN)</label>
             <input
               type="number"
@@ -146,39 +158,39 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
               required
             />
           </div>
-          
-          <div className="space-y-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Kategoria</label>
-              <select
-                value={categoryId}
-                onChange={(e) => {
-                  setCategoryId(e.target.value);
-                  setSubcategoryId('');
-                }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none text-slate-900"
+        </div>
+
+        <div className="space-y-2">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Kategoria</label>
+            <select
+              value={categoryId}
+              onChange={(e) => {
+                setCategoryId(e.target.value);
+                setSubcategoryId('');
+              }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none text-slate-900"
+            >
+              {availableCategories.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {currentCategory && currentCategory.subcategories.length > 0 && (
+            <div className="animate-fade-in">
+                <select
+                value={subcategoryId}
+                onChange={(e) => setSubcategoryId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none text-slate-600"
               >
-                {availableCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                <option value="">-- Podkategoria --</option>
+                {currentCategory.subcategories.map((sub) => (
+                  <option key={sub.id} value={sub.id}>{sub.name}</option>
                 ))}
               </select>
             </div>
-
-            {currentCategory && currentCategory.subcategories.length > 0 && (
-              <div className="animate-fade-in">
-                 <select
-                  value={subcategoryId}
-                  onChange={(e) => setSubcategoryId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none text-slate-600"
-                >
-                  <option value="">-- Podkategoria --</option>
-                  {currentCategory.subcategories.map((sub) => (
-                    <option key={sub.id} value={sub.id}>{sub.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         <Button type="submit" className="w-full mt-2">

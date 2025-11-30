@@ -7,9 +7,10 @@ interface TransactionListProps {
   transactions: Transaction[];
   categories: CategoryItem[];
   onDelete: (id: string) => void;
+  isPrivateMode?: boolean;
 }
 
-export const TransactionList: React.FC<TransactionListProps> = ({ transactions, categories, onDelete }) => {
+export const TransactionList: React.FC<TransactionListProps> = ({ transactions, categories, onDelete, isPrivateMode }) => {
   if (transactions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-slate-400">
@@ -64,7 +65,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
             <div className="flex items-center gap-4">
               <span className={`font-semibold text-sm ${
                 transaction.type === TransactionType.INCOME ? 'text-green-600' : 'text-slate-900'
-              }`}>
+              } ${isPrivateMode ? 'blur-[5px] select-none' : ''}`}>
                 {transaction.type === TransactionType.INCOME ? '+' : '-'}{CURRENCY_FORMATTER.format(transaction.amount)}
               </span>
               <button 

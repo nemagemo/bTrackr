@@ -1,19 +1,40 @@
-
-import React, { useMemo, useState } from 'react';
-import { ResponsiveContainer, Sankey, Tooltip, Layer, Rectangle } from 'recharts';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
+import * as d3 from 'd3';
+import { sankey as d3Sankey, sankeyLinkHorizontal, sankeyLeft } from 'd3-sankey';
 import { ArrowLeft } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
-import { CURRENCY_FORMATTER, SYSTEM_IDS } from '../constants';
+import { CURRENCY_FORMATTER } from '../constants';
 
 interface SankeyDiagramProps {
   transactions: Transaction[];
   categories: CategoryItem[];
+  isPrivateMode?: boolean;
 }
 
-export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, categories }) => {
+export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, categories, isPrivateMode }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 500 });
   const [drillDownCategoryId, setDrillDownCategoryId] = useState<string | null>(null);
 
-  const { data, totalVolume, isDrillDown, activeCategoryColor } = useMemo(() => {
+  // Measure container
+  useEffect(() => {
+    const measure = () => {
+        if (containerRef.current) {
+            const { width } = containerRef.current.getBoundingClientRect();
+            if (width > 0) setDimensions(prev => ({ ...prev, width }));
+        }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  const formatValue = (val: number) => {
+     if (isPrivateMode) return '****';
+     return CURRENCY_FORMATTER.format(val);
+  };
+
+  const { nodes: rawNodes, links: rawLinks, isDrillDown } = useMemo(() => {
     // --- MODE 1: DRILL DOWN (Single Category -> Subcategories) ---
     if (drillDownCategoryId) {
       const activeCategory = categories.find(c => c.id === drillDownCategoryId);
@@ -34,38 +55,37 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
         total += t.amount;
       });
 
-      if (total === 0) return { data: { nodes: [], links: [] }, totalVolume: 0, isDrillDown: true, activeCategoryColor: catColor };
+      if (total === 0) return { nodes: [], links: [], isDrillDown: true };
 
       const sortedSubKeys = Object.keys(subMap).sort((a, b) => subMap[b] - subMap[a]);
 
-      // Nodes: Source (Category) + Targets (Subcategories)
-      const nodes = [
-        { name: catName, fill: catColor, value: total, isInteractable: false },
+      // D3 nodes need unique IDs or indexes. We'll use objects.
+      const nodeList = [
+        { name: catName, color: catColor, value: total, isInteractable: false, type: 'ROOT' }, // Source
         ...sortedSubKeys.map(name => ({ 
           name, 
-          fill: '#94a3b8', // Subcategories default to slate
+          color: '#cbd5e1', // Subcategories in gray
           value: subMap[name],
-          isInteractable: false
+          isInteractable: false,
+          type: 'SUB'
         }))
       ];
 
-      const links = sortedSubKeys.map((name, index) => ({
+      const linkList = sortedSubKeys.map((name, index) => ({
         source: 0,
         target: index + 1,
         value: subMap[name]
       }));
 
-      return { data: { nodes, links }, totalVolume: total, isDrillDown: true, activeCategoryColor: catColor };
+      return { nodes: nodeList, links: linkList, isDrillDown: true };
     }
 
     // --- MODE 2: OVERVIEW (Income -> Budget -> Expenses) ---
     const incomeMap: Record<string, number> = {};
     const expenseMap: Record<string, number> = {};
-    // Store category IDs for interactivity
     const expenseIdMap: Record<string, string> = {}; 
     let totalIncome = 0;
     
-    // Pass 1: Collect raw sums
     transactions.forEach(t => {
       const cat = categories.find(c => c.id === t.categoryId);
       const catName = cat ? cat.name : 'Nieznana';
@@ -79,22 +99,16 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
       }
     });
 
-    if (totalIncome === 0 && Object.keys(expenseMap).length === 0) {
-        return { data: { nodes: [], links: [] }, totalVolume: 0, isDrillDown: false, activeCategoryColor: '' };
-    }
-
-    // Pass 2: Detect collisions
     const incomeKeys = Object.keys(incomeMap);
     const expenseKeys = Object.keys(expenseMap);
-    const duplicates = new Set(incomeKeys.filter(k => expenseKeys.includes(k)));
     
+    const duplicates = new Set(incomeKeys.filter(k => expenseKeys.includes(k)));
     if (incomeMap['Nieznana']) duplicates.add('Nieznana');
     if (incomeMap['Inne']) duplicates.add('Inne');
-    
-    // Pass 3: Build Nodes
+
     const safeIncomeMap: Record<string, number> = {};
     const safeExpenseMap: Record<string, number> = {};
-    const safeExpenseIdMap: Record<string, string> = {}; // Name -> ID
+    const safeExpenseIdMap: Record<string, string> = {};
 
     incomeKeys.forEach(k => {
         const newKey = duplicates.has(k) ? `${k} (Wpływ)` : k;
@@ -109,111 +123,191 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
 
     const totalAllocated = Object.values(expenseMap).reduce((sum, val) => sum + val, 0);
     const remaining = totalIncome - totalAllocated;
-    const hasRemaining = remaining > 0;
-    const volume = Math.max(totalIncome, totalAllocated);
+    const hasRemaining = remaining > 0.01;
 
+    // Sorting Logic
     const sortedIncomeKeys = Object.keys(safeIncomeMap).sort((a, b) => safeIncomeMap[b] - safeIncomeMap[a]);
     
-    const sortedExpenseKeys = Object.keys(safeExpenseMap).sort((a, b) => {
-       return safeExpenseMap[b] - safeExpenseMap[a];
-    });
+    // Split expenses into Savings vs Regular
+    const allExpenseKeys = Object.keys(safeExpenseMap);
+    
+    const savingsKeys = allExpenseKeys.filter(key => {
+        const catId = safeExpenseIdMap[key];
+        const cat = categories.find(c => c.id === catId);
+        return cat?.isIncludedInSavings;
+    }).sort((a, b) => safeExpenseMap[b] - safeExpenseMap[a]);
 
-    const nodes = [
-      ...sortedIncomeKeys.map(name => ({ name, fill: '#22c55e', value: safeIncomeMap[name], isInteractable: false })), 
-      { name: 'Budżet', fill: '#0f172a', value: volume, isInteractable: false }, 
-      ...sortedExpenseKeys.map(name => {
+    const regularExpenseKeys = allExpenseKeys.filter(key => {
+        const catId = safeExpenseIdMap[key];
+        const cat = categories.find(c => c.id === catId);
+        return !cat?.isIncludedInSavings;
+    }).sort((a, b) => safeExpenseMap[b] - safeExpenseMap[a]);
+
+    // Construct Node List: Incomes -> Budget -> [Surplus -> Savings -> Regular]
+    const nodeList = [
+      // 1. Incomes
+      ...sortedIncomeKeys.map(name => ({ name, color: '#22c55e', isInteractable: false, type: 'INCOME' })), 
+      
+      // 2. Budget Center
+      { name: 'Budżet', color: '#0f172a', isInteractable: false, type: 'BUDGET' }, 
+      
+      // 3. Targets (Order: Surplus -> Savings -> Regular)
+      ...(hasRemaining ? [{ name: 'Dostępne Środki', color: '#6366f1', isInteractable: false, type: 'SURPLUS' }] : []),
+      
+      ...savingsKeys.map(name => {
          const rawName = name.replace(' (Wydatek)', '');
          const cat = categories.find(c => c.name === rawName);
+         const catId = safeExpenseIdMap[name];
          return { 
              name, 
-             fill: cat ? cat.color : '#94a3b8', 
-             value: safeExpenseMap[name],
-             isInteractable: true, // Mark as clickable
-             categoryId: safeExpenseIdMap[name]
+             color: cat ? cat.color : '#94a3b8', 
+             isInteractable: true,
+             categoryId: catId,
+             type: 'SAVINGS'
          };
       }),
-      ...(hasRemaining ? [{ name: 'Dostępne Środki', fill: '#6366f1', value: remaining, isInteractable: false }] : [])
+
+      ...regularExpenseKeys.map(name => {
+         const rawName = name.replace(' (Wydatek)', '');
+         const cat = categories.find(c => c.name === rawName);
+         const catId = safeExpenseIdMap[name];
+         return { 
+             name, 
+             color: cat ? cat.color : '#94a3b8', 
+             isInteractable: true,
+             categoryId: catId,
+             type: 'EXPENSE'
+         };
+      }),
     ];
 
-    const getNodeIndex = (name: string) => nodes.findIndex(n => n.name === name);
-    const walletIndex = getNodeIndex('Budżet');
+    const linkList: any[] = [];
+    
+    // Indices
+    let currentIndex = 0;
+    
+    // Income Nodes indices: 0 to sortedIncomeKeys.length - 1
+    const budgetIndex = sortedIncomeKeys.length;
+    
+    // Links: Income -> Budget
+    sortedIncomeKeys.forEach((name, i) => {
+       linkList.push({ source: i, target: budgetIndex, value: safeIncomeMap[name] });
+    });
 
-    const links: any[] = [];
-    sortedIncomeKeys.forEach(cat => links.push({ source: getNodeIndex(cat), target: walletIndex, value: safeIncomeMap[cat] }));
-    sortedExpenseKeys.forEach(cat => links.push({ source: walletIndex, target: getNodeIndex(cat), value: safeExpenseMap[cat] }));
-    if (hasRemaining) links.push({ source: walletIndex, target: getNodeIndex('Dostępne Środki'), value: remaining });
+    let targetStartIndex = budgetIndex + 1;
 
-    return { data: { nodes, links }, totalVolume: volume, isDrillDown: false, activeCategoryColor: '' };
+    // Link: Budget -> Surplus
+    if (hasRemaining) {
+        linkList.push({ source: budgetIndex, target: targetStartIndex, value: remaining });
+        targetStartIndex++;
+    }
+
+    // Links: Budget -> Savings
+    savingsKeys.forEach((name) => {
+        linkList.push({ source: budgetIndex, target: targetStartIndex, value: safeExpenseMap[name] });
+        targetStartIndex++;
+    });
+
+    // Links: Budget -> Regular Expenses
+    regularExpenseKeys.forEach((name) => {
+        linkList.push({ source: budgetIndex, target: targetStartIndex, value: safeExpenseMap[name] });
+        targetStartIndex++;
+    });
+
+    return { nodes: nodeList, links: linkList, isDrillDown: false };
   }, [transactions, categories, drillDownCategoryId]);
 
-  if (data.nodes.length === 0) return <div className="p-4 text-center text-slate-400">Brak danych.</div>;
+  const layoutData = useMemo(() => {
+    if (dimensions.width === 0 || rawNodes.length === 0) return null;
 
-  const renderNode = (props: any) => {
-    const { x, y, width, height, index, payload, containerWidth } = props;
-    const isOut = x > (containerWidth || 500) / 2;
-    const percent = totalVolume > 0 ? ((payload.value / totalVolume) * 100).toFixed(1) : '0';
+    const margin = { top: 10, right: 1, bottom: 10, left: 1 };
+    const width = Math.max(1, dimensions.width - margin.left - margin.right);
+    const height = Math.max(1, dimensions.height - margin.top - margin.bottom);
+
+    const sankeyGenerator = d3Sankey()
+      .nodeWidth(16)
+      .nodePadding(12)
+      .extent([[0, 0], [width, height]])
+      .nodeAlign(sankeyLeft)
+      .nodeSort(null); // Respect our manual sort order
+
+    const nodes = rawNodes.map(d => ({ ...d }));
+    const links = rawLinks.map(d => ({ ...d }));
+
+    const { nodes: computedNodes, links: computedLinks } = sankeyGenerator({ nodes, links });
+
+    // --- MANUAL CENTERING (Only in Overview Mode) ---
+    if (!isDrillDown) {
+        // 1. Center 'Budżet'
+        const budgetNode = computedNodes.find((n: any) => n.name === 'Budżet');
+        if (budgetNode) {
+           const nodeH = budgetNode.y1 - budgetNode.y0;
+           const targetY = (height - nodeH) / 2;
+           const dy = targetY - budgetNode.y0;
+           budgetNode.y0 += dy;
+           budgetNode.y1 += dy;
+           computedLinks.filter((l: any) => l.source.index === budgetNode.index).forEach((l: any) => l.y0 += dy);
+           computedLinks.filter((l: any) => l.target.index === budgetNode.index).forEach((l: any) => l.y1 += dy);
+        }
+
+        // 2. Center Income Group
+        const incomeNodes = computedNodes.filter((n: any) => 
+           computedLinks.some((l: any) => l.source.index === n.index && l.target.name === 'Budżet')
+        );
+        if (incomeNodes.length > 0) {
+           const minY = Math.min(...incomeNodes.map((n: any) => n.y0));
+           const maxY = Math.max(...incomeNodes.map((n: any) => n.y1));
+           const grpHeight = maxY - minY;
+           const targetY = (height - grpHeight) / 2;
+           const dy = targetY - minY;
+           incomeNodes.forEach((n: any) => {
+              n.y0 += dy; n.y1 += dy;
+              computedLinks.filter((l: any) => l.source.index === n.index).forEach((l: any) => l.y0 += dy);
+           });
+        }
+    }
     
-    const isInteractable = payload.isInteractable && !isDrillDown;
-    const cursor = isInteractable ? 'pointer' : 'default';
-    
-    return (
-      <Layer key={`node-${index}`}>
-        <g 
-          onClick={() => {
-            if (isInteractable && payload.categoryId) {
-              setDrillDownCategoryId(payload.categoryId);
-            }
-          }}
-          style={{ cursor }}
-          onMouseEnter={(e) => {
-             if(isInteractable) (e.currentTarget as SVGElement).style.opacity = '0.8';
-          }}
-          onMouseLeave={(e) => {
-             if(isInteractable) (e.currentTarget as SVGElement).style.opacity = '1';
-          }}
-        >
-          <Rectangle
-            x={x} y={y} width={width} height={height}
-            fill={payload.fill} 
-            fillOpacity={1}
-            rx={6} ry={6}
-            style={{ cursor, pointerEvents: 'auto' }}
-          />
+    computedNodes.forEach((n: any) => { n.x0 += margin.left; n.x1 += margin.left; n.y0 += margin.top; n.y1 += margin.top; });
+    computedLinks.forEach((l: any) => { l.y0 += margin.top; l.y1 += margin.top; });
+
+    return { nodes: computedNodes, links: computedLinks, width };
+  }, [rawNodes, rawLinks, dimensions, isDrillDown]);
+
+  // Helper to determine link color
+  const getLinkColor = (link: any) => {
+      // 1. Drill-down: Use source color (Category Color)
+      if (isDrillDown) {
+          return link.source.color || '#cbd5e1';
+      }
+
+      // 2. Links flowing INTO Budget (Incomes) -> Green
+      if (link.target.name === 'Budżet') {
+          return '#22c55e'; // Green-500
+      }
+
+      // 3. Links flowing OUT of Budget
+      if (link.source.name === 'Budżet') {
+          // A. Surplus -> Green
+          if (link.target.name === 'Dostępne Środki') {
+              return '#22c55e'; // Green-500
+          }
           
-          {/* Label Group */}
-          <text
-            x={isOut ? x + width + 8 : x - 8}
-            y={y + height / 2}
-            dy={-5}
-            textAnchor={isOut ? 'start' : 'end'}
-            fontSize={13}
-            fill="#0f172a" 
-            fontWeight="600"
-            style={{ cursor, pointerEvents: 'auto' }}
-          >
-            {payload.name}
-          </text>
+          // B. Savings -> Blue
+          // We can check the node type we added earlier or look up the category again
+          if (link.target.type === 'SAVINGS') {
+              return '#3b82f6'; // Blue-500
+          }
 
-          {/* Value Label */}
-          <text
-            x={isOut ? x + width + 8 : x - 8}
-            y={y + height / 2}
-            dy={12}
-            textAnchor={isOut ? 'start' : 'end'}
-            fontSize={11}
-            fill="#64748b"
-            style={{ cursor, pointerEvents: 'auto' }}
-          >
-            {CURRENCY_FORMATTER.format(payload.value)} ({percent}%)
-          </text>
-        </g>
-      </Layer>
-    );
+          // C. Regular Expenses -> Red
+          return '#ef4444'; // Red-500
+      }
+
+      return '#e2e8f0'; // Fallback
   };
 
   return (
     <div className="w-full flex flex-col h-[540px]">
-        {/* Header / Navigation */}
+        {/* Header */}
         <div className="flex items-center justify-between mb-2 h-8">
             {isDrillDown ? (
                 <button 
@@ -222,40 +316,94 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                 >
                     <ArrowLeft size={14} /> Wróć do pełnego obrazu
                 </button>
-            ) : (
-                <div /> /* Spacer to keep height consistent if needed, or just empty */
-            )}
+            ) : <div />}
         </div>
 
-      <div className="flex-1 font-sans">
-        <ResponsiveContainer width="100%" height="100%">
-          <Sankey
-            data={data}
-            node={renderNode}
-            nodePadding={isDrillDown ? 60 : 40}
-            margin={{ top: 60, bottom: 20, left: 160, right: 160 }}
-            link={{ stroke: '#cbd5e1', strokeOpacity: 0.25 }}
-            iterations={0}
-          >
-            <Tooltip content={({ active, payload }: any) => {
-               if (!active || !payload?.length) return null;
-               const d = payload[0].payload;
-               const val = d.value;
-               const percent = totalVolume > 0 ? ((val/totalVolume)*100).toFixed(1) : '0';
-               const label = d.name || (d.source?.name + ' → ' + d.target?.name);
-               
-               return (
-                   <div className="bg-white p-2.5 border border-slate-100 shadow-xl rounded-lg text-xs z-50">
-                       <div className="font-bold text-slate-800 mb-0.5">{label}</div>
-                       <div className="text-slate-600">
-                           {CURRENCY_FORMATTER.format(val)} <span className="text-slate-400">({percent}%)</span>
-                       </div>
-                   </div>
-               );
-            }} />
-          </Sankey>
-        </ResponsiveContainer>
-      </div>
+        <div ref={containerRef} className="flex-1 w-full relative overflow-hidden">
+           {!layoutData ? (
+              <div className="h-full flex items-center justify-center text-slate-400">
+                 {rawNodes.length === 0 ? 'Brak danych' : 'Ładowanie...'}
+              </div>
+           ) : (
+              <svg width="100%" height="100%" className="overflow-visible">
+                  <g>
+                     {layoutData.links.map((link: any, i: number) => {
+                        const path = sankeyLinkHorizontal()(link);
+                        const strokeColor = getLinkColor(link);
+                        
+                        return (
+                           <path 
+                              key={i}
+                              d={path || ''} 
+                              fill="none" 
+                              stroke={strokeColor}
+                              strokeOpacity={0.6}
+                              strokeWidth={Math.max(1, link.width)} 
+                              className="hover:stroke-opacity-80 transition-all duration-300"
+                           >
+                              <title>{`${link.source.name} → ${link.target.name}\n${formatValue(link.value)}`}</title>
+                           </path>
+                        );
+                     })}
+
+                     {layoutData.nodes.map((node: any, i: number) => {
+                        const height = Math.max(node.y1 - node.y0, 2);
+                        const width = node.x1 - node.x0;
+                        const isInteractable = node.isInteractable && !isDrillDown;
+                        const showLabel = height > 16; 
+                        const isLeft = node.x0 < dimensions.width / 2;
+                        const textX = isLeft ? node.x1 + 6 : node.x0 - 6;
+                        const textAnchor = isLeft ? 'start' : 'end';
+
+                        return (
+                           <g 
+                             key={i}
+                             style={{ cursor: isInteractable ? 'pointer' : 'default' }}
+                             onClick={() => {
+                                if (isInteractable && node.categoryId) {
+                                   setDrillDownCategoryId(node.categoryId);
+                                }
+                             }}
+                             className={isInteractable ? "hover:opacity-80 transition-opacity" : ""}
+                           >
+                              <rect 
+                                 x={node.x0} y={node.y0} height={height} width={width} 
+                                 fill={node.color} rx={4}
+                              >
+                                 <title>{`${node.name}: ${formatValue(node.value)}`}</title>
+                              </rect>
+                              
+                              {showLabel && (
+                                <>
+                                  <text
+                                     x={textX}
+                                     y={(node.y1 + node.y0) / 2}
+                                     dy="0.35em"
+                                     textAnchor={textAnchor}
+                                     fontSize={12} fontWeight={600} fill="#1e293b"
+                                     className="pointer-events-none"
+                                  >
+                                     {node.name}
+                                  </text>
+                                  <text
+                                     x={textX}
+                                     y={(node.y1 + node.y0) / 2 + 14}
+                                     dy="0.35em"
+                                     textAnchor={textAnchor}
+                                     fontSize={10} fill="#64748b"
+                                     className={`pointer-events-none ${isPrivateMode ? 'blur-[3px]' : ''}`}
+                                  >
+                                     {formatValue(node.value)}
+                                  </text>
+                                </>
+                              )}
+                           </g>
+                        );
+                     })}
+                  </g>
+              </svg>
+           )}
+        </div>
     </div>
   );
 };

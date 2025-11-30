@@ -13,8 +13,10 @@
     "@google/genai": "^1.30.0",
     "lucide-react": "^0.554.0",
     "react-dom": "^19.2.0",
-    "recharts": "^3.5.0",
-    "papaparse": "5.4.1"
+    "papaparse": "5.4.1",
+    "d3": "7.9.0",
+    "d3-sankey": "0.12.3",
+    "@nivo/sankey": "^0.99.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

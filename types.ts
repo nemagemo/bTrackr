@@ -1,4 +1,5 @@
 
+
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE'
@@ -16,6 +17,7 @@ export interface CategoryItem {
   color: string;
   isSystem: boolean; // Deprecated in logic, kept for structure compatibility, now false for everyone
   isIncludedInSavings?: boolean; // New flag for Savings Rate calculation
+  budgetLimit?: number; // User defined monthly limit
   subcategories: SubcategoryItem[];
 }
 

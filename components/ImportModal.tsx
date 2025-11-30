@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
-import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers, Trash2, FilePlus, AlertTriangle, Link, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, AlertCircle, Check, ArrowRight, Settings2, Layers, Trash2, FilePlus, AlertTriangle, Link, TrendingUp, TrendingDown, Sparkles, CalendarDays, RefreshCw } from 'lucide-react';
 import { Button } from './Button';
 import { Transaction, TransactionType, CategoryItem, SubcategoryItem } from '../types';
 import { KEYWORD_TO_CATEGORY_NAME } from '../constants';
@@ -15,7 +15,8 @@ interface ImportModalProps {
 }
 
 type ColumnMapping = 'date' | 'amount' | 'description' | 'category' | 'skip';
-type ImportStep = 'UPLOAD' | 'RECONCILE' | 'DECISION' | 'MAP' | 'GROUP';
+type ImportStep = 'UPLOAD' | 'MAP' | 'DATE_CORRECTION' | 'RECONCILE' | 'DECISION' | 'GROUP';
+type DateFormat = 'DD-MM-YYYY' | 'MM-DD-YYYY' | 'YYYY-MM-DD';
 
 interface GroupedTransaction {
   signature: string;
@@ -39,6 +40,15 @@ interface ReconciliationMapping {
   targetSubcategoryId?: string;
 }
 
+interface RawTransactionRow {
+  dateStr: string;
+  amount: number;
+  description: string;
+  categoryName: string;
+  // Metadata for re-parsing
+  originalRow: string[];
+}
+
 const IGNORED_PREFIXES = [
   'platnosc', 'płatność', 'transakcja', 'karta', 'kartą', 'zakup', 
   'przelew', 'terminal', 'pos', 'nr', 'rezerwacja', 'oplata', 'opłata',
@@ -54,10 +64,22 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const [mappings, setMappings] = useState<Record<number, ColumnMapping>>({});
   const [hasHeader, setHasHeader] = useState(true);
   const [decimalSeparator, setDecimalSeparator] = useState<',' | '.'>(',');
+  const [primaryDateFormat, setPrimaryDateFormat] = useState<DateFormat>('YYYY-MM-DD');
   const [error, setError] = useState<string>('');
   
-  // Pending parsed transactions. Note: We store Category NAME temporarily here, not ID, until finalize.
+  // Staging for Parsed Items
+  // "validItems" are those that passed the primary check
+  const [validItems, setValidItems] = useState<any[]>([]);
+  // "failedRows" are those that failed the primary date format check
+  const [failedRows, setFailedRows] = useState<RawTransactionRow[]>([]);
+  
+  // For the Correction Step
+  const [secondaryDateFormat, setSecondaryDateFormat] = useState<DateFormat>('DD-MM-YYYY');
+  const [correctionPreview, setCorrectionPreview] = useState<{original: string, parsed: string}[]>([]);
+
+  // Pending parsed transactions (merged valid + fixed)
   const [pendingItems, setPendingItems] = useState<any[]>([]);
+  
   const [detectedGroups, setDetectedGroups] = useState<GroupedTransaction[]>([]);
   const [isBackupFile, setIsBackupFile] = useState(false);
 
@@ -78,6 +100,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setIsBackupFile(false);
     setConflicts([]);
     setReconciliationMap({});
+    setValidItems([]);
+    setFailedRows([]);
+    setCorrectionPreview([]);
 
     Papa.parse(file, {
       skipEmptyLines: true,
@@ -142,7 +167,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       let rawType = row[typeIdx] as TransactionType;
       // Safety check for type
       if (rawType !== TransactionType.INCOME && rawType !== TransactionType.EXPENSE) {
-         // Try to infer from category logic or default to Expense
          rawType = TransactionType.EXPENSE;
       }
 
@@ -202,27 +226,22 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     const fileSub = conflict.fileSubcategory?.toLowerCase();
     const relevantCats = categories.filter(c => c.type === conflict.type);
 
-    // Strategy 1: Match Category Name (Exact or Fuzzy)
-    // Sort by name length desc to prefer longer matches (e.g. "Dom i Rachunki" over "Dom")
     const sortedCats = [...relevantCats].sort((a, b) => b.name.length - a.name.length);
     
-    let bestCat = sortedCats.find(c => c.name.toLowerCase() === fileCat); // Exact
-    if (!bestCat) bestCat = sortedCats.find(c => fileCat.includes(c.name.toLowerCase())); // Contains
-    if (!bestCat) bestCat = sortedCats.find(c => c.name.toLowerCase().includes(fileCat)); // Is Contained
+    let bestCat = sortedCats.find(c => c.name.toLowerCase() === fileCat); 
+    if (!bestCat) bestCat = sortedCats.find(c => fileCat.includes(c.name.toLowerCase()));
+    if (!bestCat) bestCat = sortedCats.find(c => c.name.toLowerCase().includes(fileCat));
 
     let bestSub: SubcategoryItem | undefined;
 
     if (bestCat) {
-        // Try to find subcategory match
         if (fileSub) {
-             bestSub = bestCat.subcategories.find(s => s.name.toLowerCase() === fileSub); // Exact
-             if (!bestSub) bestSub = bestCat.subcategories.find(s => fileSub.includes(s.name.toLowerCase())); // Fuzzy
+             bestSub = bestCat.subcategories.find(s => s.name.toLowerCase() === fileSub);
+             if (!bestSub) bestSub = bestCat.subcategories.find(s => fileSub.includes(s.name.toLowerCase()));
         }
         return { category: bestCat, subcategory: bestSub };
     }
 
-    // Strategy 2: If Category didn't match, maybe the File Category Name matches a Subcategory in App?
-    // e.g. CSV Category: "Kino/Kultura" -> App Subcategory: "Kino" (under "Rozrywka")
     for (const cat of relevantCats) {
         const matchSub = cat.subcategories.find(s => 
             s.name.toLowerCase() === fileCat || 
@@ -244,10 +263,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   };
 
   const handleReconciliationComplete = () => {
-    // Ensure all conflicts are resolved
     const conflictKeys = conflicts.map(c => `${c.fileCategory}:::${c.fileSubcategory || ''}`);
     const resolvedKeys = Object.keys(reconciliationMap);
-    
     const allResolved = conflictKeys.every(k => resolvedKeys.includes(k) && reconciliationMap[k].targetCategoryId);
 
     if (!allResolved) {
@@ -287,41 +304,33 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       const val = cell.trim();
       const len = val.length;
       
-      // 1. Date check
       if (isDate(val)) { 
         newMappings[index] = 'date'; 
         return; 
       }
       
-      // 2. Natural number check (Skip IDs, serials, etc.)
       if (isNaturalNumber(val)) {
         newMappings[index] = 'skip';
         return;
       }
 
-      // 3. Amount check
       if (isAmount(val) && len < 20) { 
         newMappings[index] = 'amount'; 
         return; 
       }
       
-      // 4. Header heuristic for Category
       if (['kategoria', 'category', 'typ'].some(k => headerRow[index]?.toLowerCase().includes(k))) { 
         newMappings[index] = 'category'; 
         return; 
       }
 
-      // Track max length for Description heuristic
       if (len > maxLen) { 
         maxLen = len; 
         descIndex = index; 
       }
     });
 
-    // 5. Assign longest column as Description if not already mapped
     if (descIndex !== -1 && !newMappings[descIndex]) newMappings[descIndex] = 'description';
-    
-    // 6. Default others to Skip
     dataRow.forEach((_, index) => { if (!newMappings[index]) newMappings[index] = 'skip'; });
     setMappings(newMappings);
   };
@@ -332,13 +341,35 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     return parseFloat(clean);
   };
 
-  const parseDate = (val: string): string => {
-    let date = new Date(val);
-    if (isNaN(date.getTime())) {
-      const parts = val.split(/[.-]/);
-      if (parts.length === 3) date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+  const guessDateFormatFromValue = (val: string): DateFormat | null => {
+    const isValid = (dStr: string, fmt: DateFormat) => parseDateStrict(dStr, fmt) !== null;
+    if (isValid(val, 'YYYY-MM-DD')) return 'YYYY-MM-DD';
+    if (isValid(val, 'DD-MM-YYYY')) return 'DD-MM-YYYY';
+    if (isValid(val, 'MM-DD-YYYY')) return 'MM-DD-YYYY';
+    return null;
+  };
+
+  const parseDateStrict = (val: string, format: DateFormat): string | null => {
+    const parts = val.split(/[\.\-\/]/);
+    if (parts.length !== 3) return null;
+
+    let d = 0, m = 0, y = 0;
+
+    if (format === 'DD-MM-YYYY') {
+        d = parseInt(parts[0]); m = parseInt(parts[1]); y = parseInt(parts[2]);
+    } else if (format === 'MM-DD-YYYY') {
+        m = parseInt(parts[0]); d = parseInt(parts[1]); y = parseInt(parts[2]);
+    } else if (format === 'YYYY-MM-DD') {
+        y = parseInt(parts[0]); m = parseInt(parts[1]); d = parseInt(parts[2]);
     }
-    return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+
+    if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
+    if (m < 1 || m > 12) return null;
+    if (d < 1 || d > 31) return null;
+    if (y < 100) y += 2000;
+    if (y < 2000 || y > 2100) return null;
+
+    return new Date(y, m - 1, d).toISOString();
   };
 
   const detectCategoryNameFromDesc = (desc: string): string | null => {
@@ -349,18 +380,22 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     return null;
   };
 
+  // Main Parsing Logic
   const handleParseAndAnalyze = () => {
     if (!importedFile) return;
+    
     Papa.parse(importedFile, {
       skipEmptyLines: true,
       complete: (results) => {
         const rows = results.data as string[][];
-        const newItems: any[] = [];
+        const _validItems: any[] = [];
+        const _failedRows: RawTransactionRow[] = [];
+        
         const startIndex = hasHeader ? 1 : 0;
 
         for (let i = startIndex; i < rows.length; i++) {
           const row = rows[i];
-          let date = new Date().toISOString();
+          let dateStr = '';
           let amount = 0;
           let description = 'Bez opisu';
           let categoryName = 'Inne';
@@ -370,38 +405,133 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
             const val = row[parseInt(colIndex)];
             if (!val) return;
             switch (type) {
-              case 'date': date = parseDate(val); break;
+              case 'date': dateStr = val.trim(); break;
               case 'amount': amount = parseAmount(val); break;
               case 'description': description = val; break;
               case 'category': categoryName = val; foundInCsv = true; break;
             }
           });
 
-          if (amount !== 0) {
-            if (amount > 0) categoryName = 'Wynagrodzenie';
-            else if (!foundInCsv) {
-              const detected = detectCategoryNameFromDesc(description);
-              if (detected) categoryName = detected;
-            }
-            
-            newItems.push({
-              id: crypto.randomUUID(),
-              date, amount: Math.abs(amount), description,
-              type: amount > 0 ? TransactionType.INCOME : TransactionType.EXPENSE,
-              categoryName
-            });
+          // Only proceed if row looks like a transaction
+          if (amount === 0 && !dateStr) continue;
+
+          // 1. Try Primary Format
+          const validDateISO = parseDateStrict(dateStr, primaryDateFormat);
+
+          const rawRowObj: RawTransactionRow = {
+              dateStr, amount, description, categoryName: foundInCsv ? categoryName : '', originalRow: row
+          };
+
+          if (validDateISO) {
+             // Logic to deduce category if not in CSV
+             let finalCatName = categoryName;
+             if (!foundInCsv) {
+                if (amount > 0) finalCatName = 'Wynagrodzenie';
+                else {
+                    const detected = detectCategoryNameFromDesc(description);
+                    if (detected) finalCatName = detected;
+                }
+             }
+             
+             _validItems.push({
+                id: crypto.randomUUID(),
+                date: validDateISO,
+                amount: Math.abs(amount),
+                description,
+                type: amount > 0 ? TransactionType.INCOME : TransactionType.EXPENSE,
+                categoryName: finalCatName
+             });
+          } else {
+             // Failed Primary Format -> Add to failed list for correction
+             _failedRows.push(rawRowObj);
           }
         }
-        setPendingItems(newItems);
-        const groups = analyzeGroups(newItems);
-        if (groups.length > 0) {
-          setDetectedGroups(groups);
-          setStep('GROUP');
+
+        setValidItems(_validItems);
+        setFailedRows(_failedRows);
+
+        if (_failedRows.length > 0) {
+           // Heuristic: Try to guess the format of the first failure to suggest a fix
+           const sample = _failedRows[0].dateStr;
+           const guess = guessDateFormatFromValue(sample);
+           const suggestion = guess && guess !== primaryDateFormat ? guess : (primaryDateFormat === 'DD-MM-YYYY' ? 'MM-DD-YYYY' : 'DD-MM-YYYY');
+           
+           setSecondaryDateFormat(suggestion);
+           
+           // Generate preview using suggestion
+           const preview = _failedRows.slice(0, 3).map(r => ({
+               original: r.dateStr,
+               parsed: parseDateStrict(r.dateStr, suggestion) || 'Błąd'
+           }));
+           setCorrectionPreview(preview);
+           
+           setStep('DATE_CORRECTION');
         } else {
-          finalizeImport(newItems, importMode === 'REPLACE');
+           // All good
+           proceedToGrouping(_validItems);
         }
       }
     });
+  };
+
+  const handleSecondaryFormatChange = (fmt: DateFormat) => {
+      setSecondaryDateFormat(fmt);
+      const preview = failedRows.slice(0, 3).map(r => ({
+          original: r.dateStr,
+          parsed: parseDateStrict(r.dateStr, fmt) || 'Nadal błąd'
+      }));
+      setCorrectionPreview(preview);
+  };
+
+  const handleApplyCorrection = () => {
+      // Reprocess ONLY the failed rows with the secondary format
+      const fixedItems: any[] = [];
+      const stillFailed: string[] = [];
+
+      failedRows.forEach(r => {
+          const validDateISO = parseDateStrict(r.dateStr, secondaryDateFormat);
+          
+          if (validDateISO) {
+             let finalCatName = r.categoryName || 'Inne';
+             if (!r.categoryName) {
+                if (r.amount > 0) finalCatName = 'Wynagrodzenie';
+                else {
+                    const detected = detectCategoryNameFromDesc(r.description);
+                    if (detected) finalCatName = detected;
+                }
+             }
+
+             fixedItems.push({
+                id: crypto.randomUUID(),
+                date: validDateISO,
+                amount: Math.abs(r.amount),
+                description: r.description,
+                type: r.amount > 0 ? TransactionType.INCOME : TransactionType.EXPENSE,
+                categoryName: finalCatName
+             });
+          } else {
+             stillFailed.push(r.dateStr);
+          }
+      });
+
+      if (stillFailed.length > 0) {
+          alert(`Nadal nie udało się naprawić ${stillFailed.length} dat (np. ${stillFailed[0]}). Zostaną one pominięte.`);
+      }
+
+      // Merge and proceed
+      const merged = [...validItems, ...fixedItems];
+      proceedToGrouping(merged);
+  };
+
+  const proceedToGrouping = (items: any[]) => {
+      setPendingItems(items);
+      const groups = analyzeGroups(items);
+      if (groups.length > 0) {
+        setDetectedGroups(groups);
+        setStep('GROUP');
+      } else {
+        finalizeImport(items, importMode === 'REPLACE');
+      }
   };
 
   const analyzeGroups = (items: any[]): GroupedTransaction[] => {
@@ -438,7 +568,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   };
 
   const finalizeImport = (items: any[], clearHistory: boolean) => {
-    // Phase 1: Group Updates (for raw CSV import)
     let processedItems = items.map(item => {
       const group = detectedGroups.find(g => g.ids.includes(item.id));
       if (group && group.enabled) {
@@ -454,7 +583,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     const finalTransactions: Transaction[] = [];
     const createdCategories: CategoryItem[] = [];
     const currentCategoriesMap = new Map<string, CategoryItem>(categories.map(c => [c.name.toLowerCase(), c]));
-    // Map to track modified existing categories or new batch categories
     const categoriesToSave = new Map<string, CategoryItem>();
 
     const getMutableCategory = (name: string, type: TransactionType): CategoryItem => {
@@ -464,10 +592,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
 
         const existing = currentCategoriesMap.get(lower);
         if (existing) {
-           // Clone if not already in save map
            cat = { ...existing, subcategories: [...existing.subcategories] };
         } else {
-           // Create new
            cat = {
             id: crypto.randomUUID(),
             name: name,
@@ -478,7 +604,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
            };
         }
         categoriesToSave.set(lower, cat);
-        categoriesToSave.set(cat.id, cat); // Index by ID as well for safety
+        categoriesToSave.set(cat.id, cat); 
         return cat;
     };
 
@@ -486,80 +612,19 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       let categoryId = '';
       let subcategoryId: string | undefined = undefined;
 
-      // Logic for BACKUP reconciliation vs RAW CSV creation
-      if (isBackupFile) {
-        // Use reconciliation map first, then direct match
-        const conflictKey = `${item.categoryName}:::${item.subcategoryName || ''}`;
-        const mapping = reconciliationMap[conflictKey];
+      const catName = item.categoryName || 'Inne';
+      let matchedCat = getMutableCategory(catName, item.type);
+      categoryId = matchedCat.id;
 
-        if (mapping) {
-          categoryId = mapping.targetCategoryId;
-          subcategoryId = mapping.targetSubcategoryId;
-          
-          // Ensure subcategory exists (if user mapped to a category but missed subcategory)
-          if (!subcategoryId) {
-             const catObj = categories.find(c => c.id === categoryId);
-             if (catObj) {
-                // We might need to modify this existing category to add 'Inne'
-                // Check if we already modified it
-                let mutable = categoriesToSave.get(catObj.name.toLowerCase());
-                if (!mutable) mutable = { ...catObj, subcategories: [...catObj.subcategories] };
-                
-                const inne = mutable.subcategories.find(s => s.name.toLowerCase() === 'inne');
-                if (inne) {
-                   subcategoryId = inne.id;
-                } else {
-                   const newSub = { id: crypto.randomUUID(), name: 'Inne' };
-                   mutable.subcategories.push(newSub);
-                   subcategoryId = newSub.id;
-                   categoriesToSave.set(mutable.name.toLowerCase(), mutable);
-                }
-             }
-          }
-        } else {
-          // Direct match expected
-          let matchedCat = getMutableCategory(item.categoryName, item.type);
-          categoryId = matchedCat.id;
-
-          if (item.subcategoryName) {
-             const subName = item.subcategoryName;
-             const existingSub = matchedCat.subcategories.find(s => s.name.toLowerCase() === subName.toLowerCase());
-             if (existingSub) {
-                subcategoryId = existingSub.id;
-             } else {
-                const newSub = { id: crypto.randomUUID(), name: subName };
-                matchedCat.subcategories.push(newSub);
-                subcategoryId = newSub.id;
-             }
-          } else {
-             // Default to Inne
-             const existingSub = matchedCat.subcategories.find(s => s.name.toLowerCase() === 'inne');
-             if (existingSub) {
-                subcategoryId = existingSub.id;
-             } else {
-                const newSub = { id: crypto.randomUUID(), name: 'Inne' };
-                matchedCat.subcategories.push(newSub);
-                subcategoryId = newSub.id;
-             }
-          }
-        }
+      const subName = item.subcategoryName || 'Inne';
+      const existingSub = matchedCat.subcategories.find(s => s.name.toLowerCase() === subName.toLowerCase());
+      
+      if (existingSub) {
+        subcategoryId = existingSub.id;
       } else {
-        // Raw CSV: Auto-create Logic
-        const catName = item.categoryName || 'Inne';
-        
-        let matchedCat = getMutableCategory(catName, item.type);
-        categoryId = matchedCat.id;
-
-        const subName = item.subcategoryName || 'Inne';
-        const existingSub = matchedCat.subcategories.find(s => s.name.toLowerCase() === subName.toLowerCase());
-        
-        if (existingSub) {
-          subcategoryId = existingSub.id;
-        } else {
-          const newSub = { id: crypto.randomUUID(), name: subName };
-          matchedCat.subcategories.push(newSub);
-          subcategoryId = newSub.id;
-        }
+        const newSub = { id: crypto.randomUUID(), name: subName };
+        matchedCat.subcategories.push(newSub);
+        subcategoryId = newSub.id;
       }
 
       finalTransactions.push({
@@ -585,6 +650,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setDetectedGroups([]);
     setConflicts([]);
     setReconciliationMap({});
+    setValidItems([]);
+    setFailedRows([]);
+    setCorrectionPreview([]);
     onClose();
   };
 
@@ -594,8 +662,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
         const currentMap = reconciliationMap[key] || {};
         const relevantCategories = categories.filter(c => c.type === conflict.type);
         const selectedCat = categories.find(c => c.id === currentMap.targetCategoryId);
-
-        // Smart Suggestion Logic
         const suggestion = findSuggestion(conflict);
 
         return (
@@ -615,7 +681,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                        </button>
                      )}
                    </div>
-                   
                    {conflict.fileSubcategory && (
                      <div className="flex items-center gap-2 text-sm">
                        <ArrowRight size={14} className="text-slate-400" />
@@ -628,7 +693,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                 </div>
                 <Link size={16} className="text-slate-300" />
              </div>
-
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <select
                   value={currentMap.targetCategoryId || ''}
@@ -638,7 +702,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                    <option value="">-- Wybierz kategorię --</option>
                    {relevantCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-
                 {selectedCat && selectedCat.subcategories.length > 0 && (
                    <select
                     value={currentMap.targetSubcategoryId || ''}
@@ -661,8 +724,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
           <h2 className="text-lg font-bold text-slate-800">
             {step === 'UPLOAD' && 'Importuj transakcje'}
+            {step === 'MAP' && 'Dopasuj kolumny i format'}
+            {step === 'DATE_CORRECTION' && 'Korekta błędnych dat'}
             {step === 'GROUP' && 'Wykryte grupy'}
-            {step === 'MAP' && 'Dopasuj kolumny'}
             {step === 'DECISION' && 'Wykryto dane'}
             {step === 'RECONCILE' && 'Dopasuj kategorie'}
           </h2>
@@ -686,6 +750,65 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
             </div>
           )}
 
+          {step === 'DATE_CORRECTION' && (
+             <div className="max-w-xl mx-auto space-y-6">
+                 <div className="flex gap-4 mb-6">
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 flex-1 text-center">
+                        <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Poprawne</div>
+                        <div className="text-2xl font-bold text-emerald-600">{validItems.length}</div>
+                    </div>
+                    <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex-1 text-center">
+                        <div className="text-xs text-red-500 uppercase font-bold tracking-wider mb-1">Błędne</div>
+                        <div className="text-2xl font-bold text-red-600">{failedRows.length}</div>
+                    </div>
+                 </div>
+
+                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                     <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                        <RefreshCw size={18} className="text-indigo-600"/>
+                        Napraw błędne wiersze
+                     </h3>
+                     <p className="text-sm text-slate-600 mb-4">
+                        Aplikacja spróbuje automatycznie przekształcić błędne daty używając wybranego poniżej formatu, nie naruszając poprawnych wierszy.
+                     </p>
+                     
+                     <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                           <label className="block text-xs font-medium text-slate-500 mb-1">Oryginał (z CSV)</label>
+                           <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-mono text-slate-700">
+                              {correctionPreview[0]?.original || '---'}
+                           </div>
+                        </div>
+                        <div className="flex flex-col justify-center items-center">
+                            <ArrowRight size={20} className="text-slate-300 mb-1 rotate-90 sm:rotate-0" />
+                        </div>
+                        <div className="-mt-8 sm:mt-0 col-span-2 sm:col-span-1">
+                           <label className="block text-xs font-medium text-slate-500 mb-1">Po naprawie</label>
+                           <div className={`border rounded-lg p-2 text-sm font-mono ${correctionPreview[0]?.parsed.includes('Nadal') || correctionPreview[0]?.parsed.includes('Błąd') ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+                              {correctionPreview[0]?.parsed || '---'}
+                           </div>
+                        </div>
+                     </div>
+
+                     <label className="block text-sm font-medium text-slate-700 mb-2">Format błędnych dat:</label>
+                     <select 
+                         value={secondaryDateFormat}
+                         onChange={(e) => handleSecondaryFormatChange(e.target.value as DateFormat)}
+                         className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 text-slate-900"
+                     >
+                         <option value="DD-MM-YYYY">DD-MM-YYYY (np. 31-01-2024)</option>
+                         <option value="MM-DD-YYYY">MM-DD-YYYY (np. 01-31-2024)</option>
+                         <option value="YYYY-MM-DD">YYYY-MM-DD (np. 2024-01-31)</option>
+                     </select>
+                 </div>
+
+                 <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 flex gap-2 items-start text-xs text-amber-800">
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                    <p>Wiersze, których nie uda się naprawić wybranym formatem, zostaną pominięte w imporcie.</p>
+                 </div>
+             </div>
+          )}
+
           {step === 'RECONCILE' && (
             <div className="space-y-6">
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
@@ -699,7 +822,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
               </div>
 
               <div className="space-y-6">
-                {/* Income Section */}
                 {conflicts.some(c => c.type === TransactionType.INCOME) && (
                   <div>
                     <h3 className="text-sm font-bold text-green-700 bg-green-50 p-2 rounded mb-3 flex items-center gap-2">
@@ -710,8 +832,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                     </div>
                   </div>
                 )}
-
-                {/* Expense Section */}
                 {conflicts.some(c => c.type === TransactionType.EXPENSE) && (
                   <div>
                     <h3 className="text-sm font-bold text-red-700 bg-red-50 p-2 rounded mb-3 flex items-center gap-2">
@@ -728,19 +848,40 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
 
           {step === 'MAP' && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 px-1">
-                <input 
-                  type="checkbox" 
-                  id="hasHeader" 
-                  checked={hasHeader} 
-                  onChange={(e) => setHasHeader(e.target.checked)} 
-                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer bg-white accent-indigo-600"
-                  style={{ colorScheme: 'light' }}
-                />
-                <label htmlFor="hasHeader" className="text-sm text-slate-700 font-medium select-none cursor-pointer">
-                  Pierwszy wiersz zawiera nagłówki
-                </label>
-              </div>
+               {/* Global Options Bar */}
+               <div className="bg-slate-100 p-3 rounded-xl flex flex-wrap items-center gap-4 border border-slate-200">
+                  <div className="flex items-center gap-2 px-1">
+                    <input 
+                      type="checkbox" 
+                      id="hasHeader" 
+                      checked={hasHeader} 
+                      onChange={(e) => setHasHeader(e.target.checked)} 
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer bg-white accent-indigo-600"
+                      style={{ colorScheme: 'light' }}
+                    />
+                    <label htmlFor="hasHeader" className="text-sm text-slate-700 font-medium select-none cursor-pointer">
+                      Pierwszy wiersz to nagłówki
+                    </label>
+                  </div>
+
+                  <div className="w-px h-6 bg-slate-300 hidden sm:block"></div>
+
+                  {Object.values(mappings).includes('date') && (
+                      <div className="flex items-center gap-2 animate-fade-in">
+                          <CalendarDays size={16} className="text-slate-500" />
+                          <label className="text-sm text-slate-700 font-medium">Główny format daty:</label>
+                          <select 
+                              value={primaryDateFormat}
+                              onChange={(e) => setPrimaryDateFormat(e.target.value as DateFormat)}
+                              className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 text-slate-900"
+                          >
+                              <option value="YYYY-MM-DD">YYYY-MM-DD (2024-01-31)</option>
+                              <option value="DD-MM-YYYY">DD-MM-YYYY (31-01-2024)</option>
+                              <option value="MM-DD-YYYY">MM-DD-YYYY (01-31-2024)</option>
+                          </select>
+                      </div>
+                  )}
+               </div>
               
               <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm">
@@ -831,6 +972,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
 
         <div className="p-4 bg-white border-t flex justify-end gap-2">
            {step === 'MAP' && <Button onClick={handleParseAndAnalyze}>Dalej</Button>}
+           {step === 'DATE_CORRECTION' && <Button onClick={handleApplyCorrection}>Zastosuj i Importuj</Button>}
            {step === 'RECONCILE' && <Button onClick={handleReconciliationComplete}>Potwierdź dopasowania</Button>}
            {step === 'GROUP' && <Button onClick={() => finalizeImport(pendingItems, importMode === 'REPLACE')}>Importuj</Button>}
         </div>

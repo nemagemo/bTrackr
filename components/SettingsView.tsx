@@ -1,13 +1,18 @@
 
+
+
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank } from 'lucide-react';
-import { CategoryItem, SubcategoryItem, TransactionType } from '../types';
+import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target } from 'lucide-react';
+import { CategoryItem, SubcategoryItem, TransactionType, Transaction } from '../types';
 import { ConfirmModal } from './ConfirmModal';
+import { TransferModal } from './TransferModal';
+import { CURRENCY_FORMATTER } from '../constants';
 
 interface SettingsViewProps {
   categories: CategoryItem[];
+  transactions: Transaction[];
   onUpdateCategories: (categories: CategoryItem[]) => void;
-  onDeleteCategory: (id: string) => void;
+  onDeleteCategory: (id: string, targetCategoryId?: string, targetSubcategoryId?: string) => void;
   onDeleteSubcategory: (catId: string, subId: string) => void;
   includeBalanceInSavings: boolean;
   onToggleBalanceInSavings: (val: boolean) => void;
@@ -80,6 +85,7 @@ const AddSubcategoryInput = ({ onAdd }: { onAdd: (name: string) => void }) => {
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ 
   categories, 
+  transactions,
   onUpdateCategories, 
   onDeleteCategory, 
   onDeleteSubcategory,
@@ -99,7 +105,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('#64748b');
 
-  // Confirmation Modal State
+  // Deletion logic
+  const [categoryToDelete, setCategoryToDelete] = useState<CategoryItem | null>(null);
+
+  // Confirmation Modal State (for Subcategories)
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -123,6 +132,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       type: activeTab,
       isSystem: false,
       isIncludedInSavings: false,
+      budgetLimit: 0,
       subcategories: [{ id: crypto.randomUUID(), name: 'Inne' }]
     };
     onUpdateCategories([...categories, newCategory]);
@@ -149,6 +159,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     ));
   };
 
+  const handleUpdateBudgetLimit = (catId: string, limit: string) => {
+    const numLimit = limit === '' ? 0 : parseFloat(limit);
+    onUpdateCategories(categories.map(c => 
+      c.id === catId ? { ...c, budgetLimit: numLimit } : c
+    ));
+  };
+
   // Subcategory Logic
   const handleAddSubcategory = (catId: string, name: string) => {
     if (!name) return;
@@ -158,13 +175,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     ));
   };
 
-  const requestDeleteCategory = (id: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Usuń kategorię',
-      message: 'Usunięcie kategorii spowoduje przeniesienie wszystkich jej transakcji do kategorii "Inne". Czy kontynuować?',
-      action: () => onDeleteCategory(id),
-    });
+  const requestDeleteCategory = (category: CategoryItem) => {
+    setCategoryToDelete(category);
   };
 
   const requestDeleteSubcategory = (catId: string, subId: string) => {
@@ -256,6 +268,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 )}
 
+                {/* Edit Budget Limit (Only for Expense) */}
+                {activeTab === TransactionType.EXPENSE && !editingCatId && (
+                   <div className="flex items-center mr-2 relative group/limit">
+                      <Target size={14} className={`mr-1 ${cat.budgetLimit && cat.budgetLimit > 0 ? 'text-indigo-500' : 'text-slate-300'}`} />
+                      <input 
+                        type="number"
+                        placeholder="Limit"
+                        value={cat.budgetLimit && cat.budgetLimit > 0 ? cat.budgetLimit : ''}
+                        onChange={(e) => handleUpdateBudgetLimit(cat.id, e.target.value)}
+                        className="w-16 border-b border-slate-200 focus:border-indigo-500 bg-transparent text-xs text-right focus:outline-none text-slate-700 placeholder-slate-300"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                   </div>
+                )}
+
                 <div className="flex items-center gap-1">
                   {!editingCatId && (
                     <button onClick={() => handleStartEdit(cat)} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded">
@@ -263,7 +290,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </button>
                   )}
                   {!editingCatId && (
-                    <button onClick={() => requestDeleteCategory(cat.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded">
+                    <button onClick={() => requestDeleteCategory(cat)} className="p-1.5 text-slate-400 hover:text-red-600 rounded">
                       <Trash2 size={14} />
                     </button>
                   )}
@@ -287,19 +314,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               {/* Subcategories */}
               {expandedCategory === cat.id && (
                 <div className="bg-slate-50 p-3 border-t border-slate-100 space-y-2">
+                  <div className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex justify-between px-2">
+                     <span>Nazwa</span>
+                     <div className="flex gap-2">
+                        <span>Usuń</span>
+                     </div>
+                  </div>
                   {cat.subcategories.map(sub => (
-                    <div key={sub.id} className="flex items-center justify-between text-sm pl-8 pr-2 group">
+                    <div key={sub.id} className="flex items-center justify-between text-sm pl-4 pr-2 group hover:bg-slate-100 rounded py-1">
                       <span className="text-slate-600">{sub.name}</span>
-                      <button 
-                        onClick={() => requestDeleteSubcategory(cat.id, sub.id)}
-                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                         <button 
+                            onClick={() => requestDeleteSubcategory(cat.id, sub.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                         >
+                            <Trash2 size={14} />
+                         </button>
+                      </div>
                     </div>
                   ))}
                   
-                  <div className="pl-8 pt-2">
+                  <div className="pl-4 pt-2">
                     <AddSubcategoryInput onAdd={(name) => handleAddSubcategory(cat.id, name)} />
                   </div>
                 </div>
@@ -344,6 +379,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         onConfirm={() => { confirmModal.action(); setConfirmModal(prev => ({ ...prev, isOpen: false })); }} 
         title={confirmModal.title} 
         message={confirmModal.message} 
+      />
+
+      <TransferModal 
+        isOpen={!!categoryToDelete}
+        categoryToDelete={categoryToDelete}
+        transactions={transactions}
+        categories={categories}
+        onClose={() => setCategoryToDelete(null)}
+        onConfirm={(targetCatId, targetSubId) => {
+          if (categoryToDelete) {
+             onDeleteCategory(categoryToDelete.id, targetCatId, targetSubId);
+             setCategoryToDelete(null);
+          }
+        }}
       />
     </div>
   );
