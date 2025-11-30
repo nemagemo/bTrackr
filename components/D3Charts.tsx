@@ -28,7 +28,7 @@ const useResizeObserver = (ref: React.RefObject<HTMLElement>) => {
 };
 
 const formatValue = (val: number, isPrivate?: boolean) => {
-   if (isPrivate) return '<span class="blur-[4px] select-none">9999</span>';
+   if (isPrivate) return '***';
    return CURRENCY_FORMATTER.format(val);
 }
 

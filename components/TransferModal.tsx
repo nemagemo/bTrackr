@@ -102,7 +102,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                   }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900"
                 >
-                  <option value="">-- Domyślnie ("Inne") --</option>
+                  <option value="">Domyślnie ("Inne")</option>
                   {availableCategories.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -117,7 +117,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                     onChange={(e) => setTargetSubcategoryId(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900"
                   >
-                    <option value="">-- Domyślnie ("Inne") --</option>
+                    <option value="">Domyślnie ("Inne")</option>
                     {selectedTargetCategory.subcategories.map(s => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}

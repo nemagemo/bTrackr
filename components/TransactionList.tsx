@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, TrendingDown, TrendingUp } from 'lucide-react';
+import { Trash2, TrendingDown, TrendingUp, Scissors, Edit2 } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { getCategoryColor, getCategoryName, CURRENCY_FORMATTER } from '../constants';
 
@@ -65,8 +65,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
             <div className="flex items-center gap-4">
               <span className={`font-semibold text-sm ${
                 transaction.type === TransactionType.INCOME ? 'text-green-600' : 'text-slate-900'
-              } ${isPrivateMode ? 'blur-[5px] select-none' : ''}`}>
-                {transaction.type === TransactionType.INCOME ? '+' : '-'}{CURRENCY_FORMATTER.format(transaction.amount)}
+              }`}>
+                {isPrivateMode ? '***' : `${transaction.type === TransactionType.INCOME ? '+' : '-'}${CURRENCY_FORMATTER.format(transaction.amount)}`}
               </span>
               <button 
                 onClick={() => onDelete(transaction.id)}

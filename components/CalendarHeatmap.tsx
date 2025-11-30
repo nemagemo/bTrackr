@@ -96,7 +96,7 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
         if (val === 0) return;
 
         const valDisplay = isPrivateMode 
-          ? '<span class="blur-[4px] select-none">999</span>' 
+          ? '***' 
           : CURRENCY_FORMATTER.format(val);
 
         tooltip.style("opacity", 1)

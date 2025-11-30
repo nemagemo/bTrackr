@@ -30,7 +30,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
   }, []);
 
   const formatValue = (val: number) => {
-     if (isPrivateMode) return '****';
+     if (isPrivateMode) return '***';
      return CURRENCY_FORMATTER.format(val);
   };
 
@@ -391,7 +391,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                                      dy="0.35em"
                                      textAnchor={textAnchor}
                                      fontSize={10} fill="#64748b"
-                                     className={`pointer-events-none ${isPrivateMode ? 'blur-[3px]' : ''}`}
+                                     className={`pointer-events-none`}
                                   >
                                      {formatValue(node.value)}
                                   </text>

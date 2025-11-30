@@ -18,8 +18,8 @@ export const StatCard: React.FC<StatCardProps> = ({ label, value, icon, colorCla
           {icon}
         </div>
       </div>
-      <div className={`text-2xl font-bold tracking-tight ${colorClass} ${isPrivateMode ? 'blur-[8px] select-none' : ''}`}>
-        {value}
+      <div className={`text-2xl font-bold tracking-tight ${colorClass}`}>
+        {isPrivateMode ? '***' : value}
       </div>
     </div>
   );

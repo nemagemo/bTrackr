@@ -84,9 +84,11 @@ export const BudgetPulse: React.FC<BudgetPulseProps> = ({ transactions, categori
                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></div>
                            <span className="truncate max-w-[120px]">{item.name}</span>
                         </div>
-                        <div className={`flex gap-1 ${isPrivateMode ? 'blur-[5px] select-none' : ''}`}>
-                           <span className={item.percent > 100 ? 'text-red-600 font-bold' : ''}>{CURRENCY_FORMATTER.format(item.current)}</span>
-                           <span className="text-slate-400">/ {CURRENCY_FORMATTER.format(item.limit)}</span>
+                        <div className={`flex gap-1`}>
+                           <span className={item.percent > 100 ? 'text-red-600 font-bold' : ''}>
+                              {isPrivateMode ? '***' : CURRENCY_FORMATTER.format(item.current)}
+                           </span>
+                           <span className="text-slate-400">/ {isPrivateMode ? '***' : CURRENCY_FORMATTER.format(item.limit)}</span>
                         </div>
                     </div>
                     
@@ -98,10 +100,13 @@ export const BudgetPulse: React.FC<BudgetPulseProps> = ({ transactions, categori
                     </div>
 
                     <div className="flex justify-end">
-                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusColor} ${isPrivateMode ? 'blur-[4px] select-none' : ''}`}>
-                          {item.remaining >= 0 
-                             ? `Pozostało: ${CURRENCY_FORMATTER.format(item.remaining)}` 
-                             : `Przekroczono o: ${CURRENCY_FORMATTER.format(Math.abs(item.remaining))}`
+                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusColor}`}>
+                          {isPrivateMode 
+                              ? (item.remaining >= 0 ? 'Pozostało: ***' : 'Przekroczono o: ***')
+                              : (item.remaining >= 0 
+                                 ? `Pozostało: ${CURRENCY_FORMATTER.format(item.remaining)}` 
+                                 : `Przekroczono o: ${CURRENCY_FORMATTER.format(Math.abs(item.remaining))}`
+                              )
                           }
                        </span>
                     </div>
