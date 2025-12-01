@@ -302,7 +302,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
          </div>
       </div>
 
-      <SpendingVelocity transactions={filteredTransactions} currentYear={selectedYear} isPrivateMode={isPrivateMode} />
+      <SpendingVelocity transactions={transactions} currentYear={selectedYear} isPrivateMode={isPrivateMode} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <DayOfWeekStats transactions={filteredTransactions} isPrivateMode={isPrivateMode} />

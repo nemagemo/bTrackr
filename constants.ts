@@ -1,19 +1,30 @@
 
 import { CategoryItem, Transaction, TransactionType } from './types';
 
-// System IDs are used to identify special categories in business logic (charts, savings rate)
+/**
+ * SYSTEM_IDS
+ * Te identyfikatory są używane w kodzie (`App.tsx`, wykresy) do specjalnego traktowania
+ * niektórych kategorii.
+ * 
+ * WAŻNE: Nie zmieniaj tych wartości, ponieważ zepsuje to logikę migracji
+ * i wykrywania oszczędności w istniejących instancjach aplikacji.
+ */
 export const SYSTEM_IDS = {
   SALARY: 'sys_salary',
-  INVESTMENTS: 'sys_investments',
-  INTERNAL_TRANSFER: 'sys_transfer',
-  SAVINGS: 'sys_savings',
+  INVESTMENTS: 'sys_investments',      // Traktowane jako oszczędności
+  INTERNAL_TRANSFER: 'sys_transfer',   // Neutralne (często ignorowane w statystykach)
+  SAVINGS: 'sys_savings',              // Traktowane jako oszczędności
   CREDIT: 'sys_credit', 
-  OTHER_EXPENSE: 'sys_other_expense',
+  OTHER_EXPENSE: 'sys_other_expense',  // Fallback dla usuniętych kategorii
   OTHER_INCOME: 'sys_other_income',
 };
 
 const createSub = (name: string) => ({ id: crypto.randomUUID(), name });
 
+/**
+ * Domyślny zestaw kategorii ładowany przy pierwszym uruchomieniu aplikacji.
+ * Zawiera flagi `isIncludedInSavings` dla odpowiednich kategorii.
+ */
 export const DEFAULT_CATEGORIES: CategoryItem[] = [
   // --- INCOMES ---
   {
@@ -163,7 +174,7 @@ export const DEFAULT_CATEGORIES: CategoryItem[] = [
     type: TransactionType.EXPENSE,
     color: '#10b981',
     isSystem: false,
-    isIncludedInSavings: true,
+    isIncludedInSavings: true, // WAŻNE: Wpływa na Calculation Logic
     subcategories: [
       createSub('Fundusz awaryjny'), createSub('Poduszka finansowa'), createSub('Konto oszczędnościowe'),
       createSub('Cele krótkoterminowe'), createSub('Nadpłata kredytu'), createSub('Lokaty'), createSub('Inne')
@@ -175,7 +186,7 @@ export const DEFAULT_CATEGORIES: CategoryItem[] = [
     type: TransactionType.EXPENSE,
     color: '#06b6d4',
     isSystem: false,
-    isIncludedInSavings: true,
+    isIncludedInSavings: true, // WAŻNE: Wpływa na Calculation Logic
     subcategories: [
       createSub('Giełda'), createSub('Obligacje'), createSub('IKE / IKZE'),
       createSub('Waluty'), createSub('Kryptowaluty'), createSub('Złoto'), createSub('Inne')
@@ -225,18 +236,21 @@ export const DEFAULT_CATEGORIES: CategoryItem[] = [
   }
 ];
 
-// Helper to get color safely
 export const getCategoryColor = (categoryId: string, categories: CategoryItem[]): string => {
   const cat = categories.find(c => c.id === categoryId);
   return cat ? cat.color : '#94a3b8';
 };
 
-// Helper to get name safely
 export const getCategoryName = (categoryId: string, categories: CategoryItem[]): string => {
   const cat = categories.find(c => c.id === categoryId);
   return cat ? cat.name : 'Nieznana';
 };
 
+/**
+ * Mapa słów kluczowych do automatycznej kategoryzacji podczas importu CSV.
+ * Jeśli dodajesz nowe sklepy, dodaj je tutaj.
+ * Klucz: fragment opisu (lowercase), Wartość: Nazwa kategorii (musi pasować do DEFAULT_CATEGORIES).
+ */
 export const KEYWORD_TO_CATEGORY_NAME: Record<string, string> = {
   // Jedzenie
   'biedronka': 'Jedzenie', 'lidl': 'Jedzenie', 'kaufland': 'Jedzenie', 'auchan': 'Jedzenie',

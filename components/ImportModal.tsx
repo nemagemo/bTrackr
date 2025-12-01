@@ -15,6 +15,7 @@ interface ImportModalProps {
   categories: CategoryItem[];
 }
 
+// Definicje stanów maszyny importu
 type ColumnMapping = 'date' | 'amount' | 'description' | 'category' | 'skip';
 type ImportStep = 'UPLOAD' | 'MAP' | 'DATE_CORRECTION' | 'RECONCILE' | 'DECISION' | 'GROUP' | 'BACKUP_CONFIRM';
 type DateFormat = 'DD-MM-YYYY' | 'MM-DD-YYYY' | 'YYYY-MM-DD';
@@ -57,11 +58,20 @@ const IGNORED_PREFIXES = [
   'zlec', 'zlecenie', 'tytul', 'tytułem', 'numer', 'rachunek', 'faktura', 'vat'
 ];
 
+/**
+ * Komponent Importu.
+ * Obsługuje import plików CSV (banki) oraz JSON (backupy bTrackr).
+ * Posiada maszynę stanów (steps) do obsługi skomplikowanego procesu mapowania i czyszczenia danych.
+ */
 export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, onRestore, hasExistingTransactions, categories }) => {
   const [step, setStep] = useState<ImportStep>('UPLOAD');
   const [importMode, setImportMode] = useState<'APPEND' | 'REPLACE'>('APPEND');
   const [importedFile, setImportedFile] = useState<File | null>(null);
+  
+  // Przechowuje surowe dane jako tablicę 2D stringów.
+  // Używane jako "źródło prawdy" dla obu typów plików (po spłaszczeniu JSON).
   const [rawFile, setRawFile] = useState<string[][]>([]);
+  
   const [mappings, setMappings] = useState<Record<number, ColumnMapping>>({});
   const [hasHeader, setHasHeader] = useState(true);
   const [decimalSeparator, setDecimalSeparator] = useState<',' | '.'>(',');
@@ -71,7 +81,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   // Backup State
   const [backupData, setBackupData] = useState<BackupData | null>(null);
 
-  // Staging for Parsed Items
+  // Staging area for Parsed Items
   const [validItems, setValidItems] = useState<any[]>([]);
   const [failedRows, setFailedRows] = useState<RawTransactionRow[]>([]);
   const [secondaryDateFormat, setSecondaryDateFormat] = useState<DateFormat>('DD-MM-YYYY');
@@ -79,7 +89,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const [pendingItems, setPendingItems] = useState<any[]>([]);
   const [detectedGroups, setDetectedGroups] = useState<GroupedTransaction[]>([]);
   
-  // Reconciliation State
+  // Reconciliation State (Legacy logic preserved but hidden in simplified flow)
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [reconciliationMap, setReconciliationMap] = useState<Record<string, ReconciliationMapping>>({});
 
@@ -91,13 +101,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const flattenJsonToTable = (json: any[]): string[][] => {
       if (json.length === 0) return [];
       
-      // 1. Collect all unique keys
       const keys = Array.from(new Set(json.flatMap(obj => Object.keys(obj))));
-      
-      // 2. Create Header
       const header = keys;
-      
-      // 3. Create Rows
       const rows = json.map(obj => {
           return keys.map(key => {
               const val = obj[key];
@@ -109,6 +114,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       return [header, ...rows];
   };
 
+  /**
+   * Główny handler uploadu.
+   * Rozróżnia CSV (PapaParse) i JSON.
+   */
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -129,35 +138,28 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
           try {
              const json = JSON.parse(event.target?.result as string);
              
-             // SCENARIO 1: It's a bTrackr Backup
+             // SCENARIO 1: It's a bTrackr Backup (pełna struktura z settings i categories)
              if (json.categories && json.transactions && Array.isArray(json.categories) && Array.isArray(json.transactions)) {
                 setBackupData(json as BackupData);
                 setStep('BACKUP_CONFIRM');
                 return;
              } 
              
-             // SCENARIO 2: It's a List of Data (e.g. export from other bank)
+             // SCENARIO 2: It's a List of Data (e.g. export from other bank API or simple JSON list)
              let dataArray: any[] = [];
              if (Array.isArray(json)) {
                  dataArray = json;
              } else if (typeof json === 'object' && json !== null) {
-                 // Try to find an array property
                  const possibleArray = Object.values(json).find(v => Array.isArray(v));
                  if (possibleArray) dataArray = possibleArray as any[];
              }
 
              if (dataArray.length > 0) {
-                 // Flatten to table and treat as CSV
+                 // Spłaszczamy JSON do tabeli, by użyć tej samej logiki mapowania co dla CSV
                  const tableData = flattenJsonToTable(dataArray);
                  if (tableData.length > 0) {
-                     setRawFile(tableData.slice(0, 6)); // Preview
-                     // We need to store full file data? No, PapaParse logic uses 'rawFile' as preview, 
-                     // but actual parsing usually re-reads file.
-                     // Since we already have data in memory, we'll bypass Papa.parse later 
-                     // and use a flag or just store full data in a ref if it's small.
-                     // For simplicity, let's override the "File" parsing logic by storing this processed data.
-                     // We will hack the 'rawFile' to contain EVERYTHING for JSON data import, 
-                     // because we don't stream JSON like CSV.
+                     setRawFile(tableData.slice(0, 6)); // Preview only initially? No, full data needed for processing logic below.
+                     // Hack: store full data in rawFile to reuse CSV logic without re-parsing stream.
                      setRawFile(tableData); 
                      
                      if (hasExistingTransactions) {
@@ -186,9 +188,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       complete: (results) => {
         if (results.data && results.data.length > 0) {
           const rows = results.data as string[][];
-          // Store preview
           const previewRows = rows.slice(0, 6);
-          setRawFile(rows); // Store all rows for CSV too (memory trade-off but simpler logic unification)
+          setRawFile(rows); // Store all rows
           
           if (hasExistingTransactions) {
               setStep('DECISION');
@@ -214,17 +215,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const handleDecision = (mode: 'APPEND' | 'REPLACE') => {
     setImportMode(mode);
     setStep('MAP');
-    // If it was JSON data, rawFile has it all. If CSV, rawFile has it all (modified above).
-    // Re-guess mappings based on the data
     if (rawFile.length > 0) {
         guessMappings(rawFile.slice(0, 6));
     }
   };
-
-  // ... (Rest of existing helper functions: analyzeConflicts, findSuggestion, handleReconciliationUpdate, etc.) -> Keep as is
-  // To save space in response, I am keeping previous implementations of these helpers implied or copy them if needed. 
-  // IMPORTANT: Since I replaced handleFileUpload, I must ensure other functions rely on 'rawFile' correctly.
   
+  // Algorytm zgadywania kolumn na podstawie zawartości (Data, Kwota, etc.)
   const guessMappings = (rows: string[][]) => {
     const headerRow = rows[0];
     const dataRow = rows.length > 1 ? rows[1] : rows[0];
@@ -271,8 +267,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setMappings(newMappings);
   };
   
-  // Need to bring back parseAmount, guessDateFormatFromValue, parseDateStrict, detectCategoryNameFromDesc...
-  // (Assuming they exist in the component scope from previous context, strictly copying them here for correctness)
   const parseAmount = (val: string): number => {
     let clean = val.replace(/[^\d.,-]/g, '');
     if (decimalSeparator === ',') clean = clean.replace(',', '.');
@@ -318,11 +312,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     return null;
   };
 
-  // Logic to process rawFile based on mappings
+  // Główna logika przetwarzania: Mapa -> Obiekty Transakcji
   const handleParseAndAnalyze = () => {
-    // Instead of re-parsing file via PapaParse (which implies reading file input again),
-    // we use 'rawFile' which now serves as the source of truth for both CSV and JSON-Data.
-    
     const _validItems: any[] = [];
     const _failedRows: RawTransactionRow[] = [];
     
@@ -347,10 +338,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
         }
       });
 
-      // Only proceed if row looks like a transaction
       if (amount === 0 && !dateStr) continue;
 
-      // 1. Try Primary Format
       const validDateISO = parseDateStrict(dateStr, primaryDateFormat);
 
       const rawRowObj: RawTransactionRow = {
@@ -360,6 +349,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       if (validDateISO) {
          let finalCatName = categoryName;
          if (!foundInCsv) {
+            // Automatyczna kategoryzacja na podstawie słów kluczowych
             if (amount > 0) finalCatName = 'Wynagrodzenie';
             else {
                 const detected = detectCategoryNameFromDesc(description);
@@ -383,6 +373,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setValidItems(_validItems);
     setFailedRows(_failedRows);
 
+    // Jeśli są błędy (np. zły format daty), pokaż ekran korekty
     if (_failedRows.length > 0) {
        const sample = _failedRows[0].dateStr;
        const guess = guessDateFormatFromValue(sample);
@@ -447,13 +438,19 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       }
   };
 
+  /**
+   * Algorytm wykrywania powtarzalnych wzorców transakcji (np. "UBER *TRIP").
+   * Pozwala użytkownikowi przypisać kategorię do całej grupy naraz.
+   */
   const analyzeGroups = (items: any[]): GroupedTransaction[] => {
     const groups: Record<string, { ids: string[], example: string, count: number }> = {};
     items.forEach(t => {
+      // Analizujemy tylko wydatki, które są nieskategoryzowane ("Inne")
       if (t.type === TransactionType.EXPENSE && (t.categoryName === 'Inne' || !t.categoryName) && t.description !== 'Bez opisu') {
         let clean = t.description.toLowerCase().replace(/[^\w\s\u00C0-\u017F]/g, ' ');
         const tokens = clean.split(/\s+/).filter(Boolean);
         let start = 0;
+        // Pomiń ignorowane prefixy ("płatność kartą...")
         while(start < tokens.length && (IGNORED_PREFIXES.includes(tokens[start]) || /^\d+$/.test(tokens[start]))) start++;
         const sig = tokens.slice(start, start + 2).join(' ');
         if (sig.length < 3) return;
@@ -480,6 +477,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setDetectedGroups(prev => prev.map(g => g.signature === sig ? { ...g, enabled: !g.enabled } : g));
   };
 
+  /**
+   * Finalizacja importu.
+   * Tworzy brakujące kategorie i przekazuje transakcje do App.tsx.
+   */
   const finalizeImport = (items: any[]) => {
     let processedItems = items.map(item => {
       const group = detectedGroups.find(g => g.ids.includes(item.id));
@@ -571,7 +572,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const renderConflictList = (items: ConflictItem[]) => {
       return (
         <div className="border rounded-xl overflow-hidden text-sm">
-             {/* ... simplified ... */}
              <div className="p-4 bg-slate-50 text-slate-500 text-center">Widok dopasowania kategorii (uproszczony)</div>
         </div>
       );

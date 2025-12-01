@@ -12,6 +12,12 @@ interface SankeyDiagramProps {
   isPrivateMode?: boolean;
 }
 
+/**
+ * Diagram Sankeya wizualizujący przepływy finansowe.
+ * Obsługuje dwa tryby:
+ * 1. Overview: Przychody -> Budżet -> Kategorie/Nadwyżka/Deficyt.
+ * 2. Drill-down: Wybrana kategoria -> Podkategorie.
+ */
 export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, categories, isPrivateMode }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 650 }); // Fixed height enforced
@@ -23,7 +29,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     const measure = () => {
         if (containerRef.current) {
             const { width, height } = containerRef.current.getBoundingClientRect();
-            // Ensure we have a valid height passed to D3, defaulting to 650 if measured is 0/small
             if (width > 0) setDimensions({ width, height: height > 100 ? height : 650 });
         }
     };
@@ -37,6 +42,10 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
      return CURRENCY_FORMATTER.format(val);
   };
 
+  /**
+   * Główna logika przygotowania danych dla D3.
+   * Definiuje węzły (Nodes) i powiązania (Links).
+   */
   const { nodes: rawNodes, links: rawLinks, isDrillDown } = useMemo(() => {
     // --- MODE 1: DRILL DOWN (Single Category -> Subcategories) ---
     if (drillDownCategoryId) {
@@ -62,6 +71,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
 
       const sortedSubKeys = Object.keys(subMap).sort((a, b) => subMap[b] - subMap[a]);
 
+      // Root node = Category, Children nodes = Subcategories
       const nodeList = [
         { name: catName, displayName: catName, color: catColor, value: total, isInteractable: false, type: 'ROOT' }, 
         ...sortedSubKeys.map(name => ({ 
@@ -146,12 +156,12 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
         addNode({ name: `${name} (Inc)`, displayName: name, color: '#22c55e', type: 'INCOME', value: incomeMap[name] });
     });
 
-    // 2. Deficit
+    // 2. Deficit (if expense > income)
     if (hasDeficit) {
         addNode({ name: 'Deficyt', displayName: 'Deficyt', color: '#f87171', type: 'DEFICIT', value: deficitAmount });
     }
 
-    // 3. Budget
+    // 3. Budget (Central Node)
     // 'value' is used by D3 to size the node (must match flows). 
     // 'realValue' is used for display (user logic).
     const budgetD3Value = hasDeficit ? totalAllocated : totalIncome;
@@ -165,7 +175,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
         realValue: totalIncome 
     });
 
-    // 4. Surplus
+    // 4. Surplus (if income > expense)
     if (hasSurplus) {
         const surplusIndex = addNode({ name: 'Nadwyżka', displayName: 'Dostępne Środki', color: '#6366f1', type: 'SURPLUS', value: balance });
         links.push({ source: budgetIndex, target: surplusIndex, value: balance });
@@ -248,7 +258,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     const width = Math.max(1, dimensions.width - margin.left - margin.right);
     const height = Math.max(1, dimensions.height - margin.top - margin.bottom);
 
-    // If detailed view, reduce padding to fit more nodes
     const nodePadding = viewMode === 'SUBCATEGORY' ? 8 : 12;
 
     const sankeyGenerator = d3Sankey()
@@ -256,15 +265,15 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
       .nodePadding(nodePadding)
       .extent([[0, 0], [width, height]])
       .nodeAlign(sankeyLeft) // Left align ensures hierarchical flow (Level 1 -> 2 -> 3)
-      .nodeSort(null); // Keep our sorting
+      .nodeSort(null); // Keep our manual sorting
 
     const nodes = rawNodes.map(d => ({ ...d }));
     const links = rawLinks.map(d => ({ ...d }));
 
     const { nodes: computedNodes, links: computedLinks } = sankeyGenerator({ nodes, links });
 
-    // --- MANUAL ADJUSTMENTS ---
-    // In CATEGORY mode, we center the Budget node to make it look like a funnel
+    // --- MANUAL ADJUSTMENTS FOR AESTHETICS ---
+    // In CATEGORY mode, we center the Budget node vertically to make it look like a funnel
     if (!isDrillDown && viewMode === 'CATEGORY') {
         const budgetNode = computedNodes.find((n: any) => n.type === 'BUDGET');
         if (budgetNode) {
@@ -290,7 +299,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                
                uniqueInputs.forEach((n: any) => {
                    n.y0 += dyIn; n.y1 += dyIn;
-                   // Adjust outgoing links from inputs
                    computedLinks.filter((l: any) => l.source.index === n.index).forEach((l: any) => l.y0 += dyIn);
                });
            }
@@ -332,7 +340,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
   };
 
   return (
-    // Fixed height container
     <div className="w-full flex flex-col" style={{ height: '650px' }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-2 h-8 shrink-0">
@@ -392,7 +399,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                         const height = Math.max(node.y1 - node.y0, 2);
                         const width = node.x1 - node.x0;
                         const isInteractable = node.isInteractable && !isDrillDown;
-                        // Lower threshold to 8px to show more labels
                         const showLabel = height > 8; 
                         
                         // Use realValue if present (e.g. for Budget node with deficit), otherwise standard value

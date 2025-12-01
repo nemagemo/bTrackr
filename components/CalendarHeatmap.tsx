@@ -1,6 +1,5 @@
-
 import React, { useRef, useEffect, useMemo, useState } from 'react';
-import * as d3 from 'd3';
+import { select, timeMonday, scaleThreshold, timeDays, timeYear, timeMonths } from 'd3';
 import { Layers, Combine } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -21,7 +20,7 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
   useEffect(() => {
     if (!width || !containerRef.current || !tooltipRef.current) return;
 
-    const svg = d3.select(containerRef.current);
+    const svg = select(containerRef.current);
     svg.selectAll("*").remove();
 
     // Config
@@ -36,7 +35,7 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
     const endDate = new Date(year, 11, 31);
     
     // Helper to get week number relative to start of year
-    const countWeeks = d3.timeMonday.count(startDate, endDate) + 2;
+    const countWeeks = timeMonday.count(startDate, endDate) + 2;
     
     const chartWidth = Math.max(width, countWeeks * (cellSize + cellGap) + margin.left + margin.right);
     const chartHeight = 7 * (cellSize + cellGap) + monthLabelHeight + margin.top;
@@ -49,13 +48,13 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
     const values = Array.from(data.values());
     const maxVal = Math.max(...(values as number[]), 1);
     
-    const colorScale = d3.scaleThreshold<number, string>()
+    const colorScale = scaleThreshold<number, string>()
       .domain([1, maxVal * 0.25, maxVal * 0.5, maxVal * 0.75])
       .range(['#f1f5f9', '#c7d2fe', '#818cf8', '#6366f1', '#312e81']); // Slate-100 to Indigo-900
 
     // --- DRAW DAYS ---
-    const days = d3.timeDays(startDate, new Date(year + 1, 0, 1));
-    const tooltip = d3.select(tooltipRef.current);
+    const days = timeDays(startDate, new Date(year + 1, 0, 1));
+    const tooltip = select(tooltipRef.current);
 
     g.selectAll(".day")
       .data(days)
@@ -64,8 +63,8 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
       .attr("height", cellSize)
       .attr("x", (d: any) => {
           const date = d as Date;
-          const startOfYear = d3.timeYear.floor(date);
-          return d3.timeMonday.count(startOfYear, date) * (cellSize + cellGap);
+          const startOfYear = timeYear.floor(date);
+          return timeMonday.count(startOfYear, date) * (cellSize + cellGap);
       })
       .attr("y", (d: any) => {
          // 0 = Sunday, but we want Monday = 0.
@@ -109,7 +108,7 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
                .style("left", `${event.clientX + 10}px`)
                .style("top", `${event.clientY + 10}px`);
         
-        d3.select(event.currentTarget).attr("stroke", "#1e293b").attr("stroke-width", 2);
+        select(event.currentTarget).attr("stroke", "#1e293b").attr("stroke-width", 2);
       })
       .on("mousemove", (event) => {
          tooltip.style("left", `${event.clientX + 10}px`)
@@ -117,7 +116,7 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
       })
       .on("mouseleave", (event) => {
          tooltip.style("opacity", 0).style("display", "none");
-         d3.select(event.currentTarget).attr("stroke", (d: any) => {
+         select(event.currentTarget).attr("stroke", (d: any) => {
             const date = d as Date;
             const dateStr = date.toISOString().split('T')[0];
             return data.has(dateStr) ? null : "#e2e8f0";
@@ -130,14 +129,14 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
 
     // --- LABELS ---
     // Month labels
-    const months = d3.timeMonths(startDate, new Date(year + 1, 0, 1));
+    const months = timeMonths(startDate, new Date(year + 1, 0, 1));
     g.selectAll(".month-label")
       .data(months)
       .enter().append("text")
       .text(d => d.toLocaleDateString('pl-PL', { month: 'short' }))
       .attr("x", d => {
-          const startOfYear = d3.timeYear.floor(d);
-          return d3.timeMonday.count(startOfYear, d) * (cellSize + cellGap);
+          const startOfYear = timeYear.floor(d);
+          return timeMonday.count(startOfYear, d) * (cellSize + cellGap);
       })
       .attr("y", 10)
       .attr("font-size", "10px")

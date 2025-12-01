@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useLayoutEffect, useState } from 'react';
-import * as d3 from 'd3';
+import { select, pie as d3Pie, arc as d3Arc, hierarchy, treemap, HierarchyRectangularNode } from 'd3';
 import { PieChart as PieIcon, LayoutGrid } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { SYSTEM_IDS, getCategoryColor, getCategoryName, CURRENCY_FORMATTER } from '../constants';
@@ -75,8 +75,8 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({ transactions, catego
     if (!width || !data.length || !svgRef.current || !tooltipRef.current) return;
     
     const height = 250;
-    const svg = d3.select(svgRef.current);
-    const tooltip = d3.select(tooltipRef.current);
+    const svg = select(svgRef.current);
+    const tooltip = select(tooltipRef.current);
     
     svg.selectAll("*").remove();
 
@@ -88,9 +88,9 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({ transactions, catego
 
       const g = svg.append("g").attr("transform", `translate(${width / 2},${height / 2})`);
 
-      const pie = d3.pie<any>().value(d => d.value).sort(null);
-      const arc = d3.arc<any>().innerRadius(radius * 0.6).outerRadius(radius);
-      const hoverArc = d3.arc<any>().innerRadius(radius * 0.6).outerRadius(radius + 5);
+      const pie = d3Pie<any>().value(d => d.value).sort(null);
+      const arc = d3Arc<any>().innerRadius(radius * 0.6).outerRadius(radius);
+      const hoverArc = d3Arc<any>().innerRadius(radius * 0.6).outerRadius(radius + 5);
 
       g.selectAll("path")
         .data(pie(data))
@@ -101,7 +101,7 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({ transactions, catego
         .style("stroke-width", "2px")
         .style("cursor", "pointer")
         .on("mouseenter", function(event, d) {
-          d3.select(this).transition().duration(200).attr("d", hoverArc);
+          select(this).transition().duration(200).attr("d", hoverArc);
           tooltip
             .style("opacity", 1)
             .style("display", "block")
@@ -115,23 +115,23 @@ export const ExpenseChart: React.FC<ExpenseChartProps> = ({ transactions, catego
                 .style("top", `${event.clientY + 10}px`);
         })
         .on("mouseleave", function() {
-          d3.select(this).transition().duration(200).attr("d", arc);
+          select(this).transition().duration(200).attr("d", arc);
           tooltip.style("opacity", 0).style("display", "none");
         });
     } 
     
     // --- RENDER TREEMAP ---
     else if (viewMode === 'TREEMAP') {
-      const root = d3.hierarchy({ children: data })
+      const root = hierarchy({ children: data })
         .sum((d: any) => d.value)
         .sort((a, b) => (b.value || 0) - (a.value || 0));
 
-      d3.treemap()
+      treemap()
         .size([width, height])
         .padding(2)
         (root);
 
-      const leaves = root.leaves();
+      const leaves = root.leaves() as HierarchyRectangularNode<any>[];
 
       const leaf = svg.selectAll("g")
         .data(leaves)

@@ -19,6 +19,9 @@ interface HistoryViewProps {
 type SortKey = 'date' | 'amount';
 type SortDirection = 'asc' | 'desc';
 
+/**
+ * Komponent wyświetlający pełną listę transakcji z filtrami i sortowaniem.
+ */
 export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categories, onEdit, onDelete, onClearAll, onOpenBulkAction, onSplit, isPrivateMode }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategoryId, setFilterCategoryId] = useState<string>('ALL');
@@ -38,25 +41,40 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
      return Array.from(tags).sort();
   }, [transactions]);
 
+  /**
+   * Logika filtrowania.
+   * Filtruje po:
+   * 1. Fraza wyszukiwania (Opis, Kwota, Tagi)
+   * 2. Kategoria
+   * 3. Typ (Wpływ/Wydatek)
+   * 4. Wybrany Tag
+   * 
+   * Używa explicit checks (if ... return), aby uniknąć błędów JS przy wartościach undefined.
+   */
   const filteredTransactions = useMemo(() => {
+    if (!transactions) return [];
+
     return transactions.filter(t => {
-      // 1. Search Filter (Explicit check)
+      // 2. Search Filter
       let matchesSearch = true;
-      if (searchTerm) {
+      if (searchTerm && searchTerm.trim() !== '') {
         const lowerTerm = searchTerm.toLowerCase();
         const inDesc = t.description.toLowerCase().includes(lowerTerm);
-        const inAmount = t.amount.toString().includes(searchTerm);
-        const inTags = t.tags ? t.tags.some(tag => tag.toLowerCase().includes(lowerTerm)) : false;
+        // Safely handle numeric amount search
+        const inAmount = t.amount !== undefined && t.amount.toString().includes(searchTerm);
+        // Safely handle tags search (tags can be undefined)
+        const inTags = t.tags && Array.isArray(t.tags) ? t.tags.some(tag => tag.toLowerCase().includes(lowerTerm)) : false;
+        
         matchesSearch = inDesc || inAmount || inTags;
       }
 
-      // 2. Category Filter
+      // 3. Category Filter
       const matchesCategory = filterCategoryId === 'ALL' || t.categoryId === filterCategoryId;
 
-      // 3. Type Filter
+      // 4. Type Filter
       const matchesType = filterType === 'ALL' || t.type === filterType;
 
-      // 4. Tag Filter
+      // 5. Tag Filter
       const matchesTag = filterTag === 'ALL' || (t.tags && t.tags.includes(filterTag));
       
       return matchesSearch && matchesCategory && matchesType && matchesTag;
@@ -67,7 +85,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
       const sorted = [...filteredTransactions];
       sorted.sort((a, b) => {
         if (sortConfig.key === 'date') {
-          // Robust date parsing
+          // Robust date parsing (timestamps comparison)
           const dateA = new Date(a.date).getTime() || 0;
           const dateB = new Date(b.date).getTime() || 0;
           return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
@@ -95,7 +113,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="bg-white p-4 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col xl:flex-row gap-4 justify-between items-center">
-        <div className="relative w-full xl:w-64">
+        <div className="relative w-full xl:w-72">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -106,7 +124,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
           />
         </div>
 
-        <div className="flex flex-wrap gap-2 w-full xl:w-auto items-center">
+        <div className="flex flex-wrap gap-2 w-full xl:flex-1 xl:justify-end items-center">
           <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg">
              <button onClick={() => setFilterType('ALL')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Wszystkie</button>
              <button onClick={() => setFilterType(TransactionType.INCOME)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === TransactionType.INCOME ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}>Przychody</button>
@@ -130,14 +148,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
 
           {transactions.length > 0 && (
             <>
-              <div className="w-px h-8 bg-slate-200 mx-1 hidden xl:block"></div>
               {onOpenBulkAction && (
                 <button onClick={onOpenBulkAction} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200 shadow-sm" title="Grupowa kategoryzacja">
-                  <ListChecks size={16} /> <span>Grupowa edycja</span>
+                  <ListChecks size={16} /> <span>Grupowa Kategoryzacja</span>
                 </button>
               )}
-              <button onClick={onClearAll} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100" title="Wyczyść">
-                <Trash2 size={14} />
+              <button onClick={onClearAll} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200 shadow-sm" title="Wyczyść Historię">
+                <Trash2 size={16} /> <span>Wyczyść Historię</span>
               </button>
             </>
           )}
