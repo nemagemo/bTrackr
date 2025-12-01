@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo } from 'react';
-import { Search, TrendingUp, TrendingDown, Edit2, Trash2, ListChecks, ArrowUp, ArrowDown, ArrowUpDown, Download, Scissors, Hash } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Edit2, Trash2, ListChecks, ArrowUp, ArrowDown, ArrowUpDown, Scissors, Hash } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER, getCategoryColor, getCategoryName } from '../constants';
 import { SplitTransactionModal } from './SplitTransactionModal';
@@ -91,40 +92,6 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
     return sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
   };
 
-  const handleExport = () => {
-    const headers = ['btrackr_id', 'date', 'amount', 'description', 'type', 'category', 'subcategory', 'tags'];
-    const rows = transactions.map(t => {
-      const cat = categories.find(c => c.id === t.categoryId);
-      const sub = cat?.subcategories.find(s => s.id === t.subcategoryId);
-      const tagsStr = t.tags ? t.tags.join(';') : '';
-      
-      return [
-        t.id,
-        t.date,
-        t.amount.toString(),
-        `"${t.description.replace(/"/g, '""')}"`,
-        t.type,
-        `"${cat?.name || 'Inne'}"`, 
-        `"${sub?.name || ''}"`,
-        `"${tagsStr}"`
-      ];
-    });
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `bTrackr_Backup_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="bg-white p-4 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col xl:flex-row gap-4 justify-between items-center">
@@ -165,13 +132,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
             <>
               <div className="w-px h-8 bg-slate-200 mx-1 hidden xl:block"></div>
               {onOpenBulkAction && (
-                <button onClick={onOpenBulkAction} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100" title="Grupowa kategoryzacja">
-                  <ListChecks size={14} />
+                <button onClick={onOpenBulkAction} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200 shadow-sm" title="Grupowa kategoryzacja">
+                  <ListChecks size={16} /> <span>Grupowa edycja</span>
                 </button>
               )}
-              <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors" title="Eksportuj">
-                <Download size={14} />
-              </button>
               <button onClick={onClearAll} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100" title="Wyczyść">
                 <Trash2 size={14} />
               </button>
