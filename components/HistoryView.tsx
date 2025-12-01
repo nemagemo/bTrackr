@@ -39,13 +39,23 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      const matchesSearch = 
-        t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.amount.toString().includes(searchTerm) ||
-        (t.tags && t.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
-      
+      // 1. Search Filter (Explicit check)
+      let matchesSearch = true;
+      if (searchTerm) {
+        const lowerTerm = searchTerm.toLowerCase();
+        const inDesc = t.description.toLowerCase().includes(lowerTerm);
+        const inAmount = t.amount.toString().includes(searchTerm);
+        const inTags = t.tags ? t.tags.some(tag => tag.toLowerCase().includes(lowerTerm)) : false;
+        matchesSearch = inDesc || inAmount || inTags;
+      }
+
+      // 2. Category Filter
       const matchesCategory = filterCategoryId === 'ALL' || t.categoryId === filterCategoryId;
+
+      // 3. Type Filter
       const matchesType = filterType === 'ALL' || t.type === filterType;
+
+      // 4. Tag Filter
       const matchesTag = filterTag === 'ALL' || (t.tags && t.tags.includes(filterTag));
       
       return matchesSearch && matchesCategory && matchesType && matchesTag;
@@ -56,8 +66,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
       const sorted = [...filteredTransactions];
       sorted.sort((a, b) => {
         if (sortConfig.key === 'date') {
-          const dateA = new Date(a.date).getTime();
-          const dateB = new Date(b.date).getTime();
+          // Robust date parsing
+          const dateA = new Date(a.date).getTime() || 0;
+          const dateB = new Date(b.date).getTime() || 0;
           return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
         } else {
           return sortConfig.direction === 'asc' 
@@ -235,7 +246,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
                   )
                 })
               ) : (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">Brak transakcji.</td></tr>
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">Brak transakcji spełniających kryteria.</td></tr>
               )}
             </tbody>
           </table>

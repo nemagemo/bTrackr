@@ -28,6 +28,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
 
   useEffect(() => {
     if (availableCategories.length > 0) {
+      // Logic to set default category when type switches
       const defaultName = type === TransactionType.INCOME ? 'Wynagrodzenie' : 'Inne';
       const defaultCat = availableCategories.find(c => c.name === defaultName) || availableCategories[0];
       setCategoryId(defaultCat.id);
@@ -39,13 +40,16 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
     e.preventDefault();
     if (!description || !amount || !categoryId || !date) return;
 
+    // Robust date creation
+    const finalDate = new Date(date).toISOString();
+
     onAdd({
       description,
       amount: parseFloat(amount),
       type,
       categoryId,
       subcategoryId: subcategoryId || undefined,
-      date: new Date(date).toISOString(),
+      date: finalDate,
       tags: tags
     });
 
@@ -53,6 +57,8 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
     setAmount('');
     setDate(new Date().toISOString().split('T')[0]);
     setTags([]);
+    
+    // Reset category to default for the current type
     const defaultName = type === TransactionType.INCOME ? 'Wynagrodzenie' : 'Inne';
     const defaultCat = availableCategories.find(c => c.name === defaultName) || availableCategories[0];
     setCategoryId(defaultCat?.id || '');

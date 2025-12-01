@@ -1,7 +1,7 @@
 
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import * as d3 from 'd3';
-import { sankey as d3Sankey, sankeyLinkHorizontal, sankeyLeft } from 'd3-sankey';
+import { sankey as d3Sankey, sankeyLinkHorizontal, sankeyLeft, sankeyJustify } from 'd3-sankey';
 import { ArrowLeft, Layers, Grid } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
@@ -14,7 +14,7 @@ interface SankeyDiagramProps {
 
 export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, categories, isPrivateMode }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 600 });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 650 }); // Fixed height enforced
   const [drillDownCategoryId, setDrillDownCategoryId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'CATEGORY' | 'SUBCATEGORY'>('CATEGORY');
 
@@ -22,8 +22,9 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
   useEffect(() => {
     const measure = () => {
         if (containerRef.current) {
-            const { width } = containerRef.current.getBoundingClientRect();
-            if (width > 0) setDimensions(prev => ({ ...prev, width }));
+            const { width, height } = containerRef.current.getBoundingClientRect();
+            // Ensure we have a valid height passed to D3, defaulting to 650 if measured is 0/small
+            if (width > 0) setDimensions({ width, height: height > 100 ? height : 650 });
         }
     };
     measure();
@@ -82,10 +83,11 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
       return { nodes: nodeList, links: linkList, isDrillDown: true };
     }
 
-    // --- MODE 2: OVERVIEW (Income -> Budget -> Expenses/Subcategories) ---
+    // --- MODE 2: OVERVIEW (Hierarchical or Simple) ---
+    // Prepare Data Maps
     const incomeMap: Record<string, number> = {};
-    const expenseMap: Record<string, number> = {}; // Key is either CatName or "CatName: SubName"
-    const expenseIdMap: Record<string, string> = {}; // Maps Key to Category ID (for coloring)
+    const expenseTree: Record<string, { total: number, subs: Record<string, number>, color: string, isSavings: boolean, catId: string }> = {};
+    
     let totalIncome = 0;
     
     transactions.forEach(t => {
@@ -96,180 +98,147 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
         incomeMap[catName] = (incomeMap[catName] || 0) + t.amount;
         totalIncome += t.amount;
       } else {
-         // EXPENSE LOGIC
-         let key = catName;
-         
-         if (viewMode === 'SUBCATEGORY') {
-             let subName = 'Inne';
-             if (t.subcategoryId) {
-                 const sub = cat?.subcategories.find(s => s.id === t.subcategoryId);
-                 if (sub) subName = sub.name;
-             }
-             // Create unique key for subcategory to avoid collisions between categories
-             key = `${catName}: ${subName}`;
+         // Initialize Category Bucket
+         if (!expenseTree[catName]) {
+             expenseTree[catName] = { 
+                 total: 0, 
+                 subs: {}, 
+                 color: cat ? cat.color : '#94a3b8',
+                 isSavings: !!cat?.isIncludedInSavings,
+                 catId: cat?.id || ''
+             };
          }
+         
+         // Add to Category Total
+         expenseTree[catName].total += t.amount;
 
-         expenseMap[key] = (expenseMap[key] || 0) + t.amount;
-         if (cat) expenseIdMap[key] = cat.id;
+         // Add to Subcategory Bucket (if detailed view)
+         let subName = 'Inne';
+         if (t.subcategoryId) {
+             const sub = cat?.subcategories.find(s => s.id === t.subcategoryId);
+             if (sub) subName = sub.name;
+         }
+         expenseTree[catName].subs[subName] = (expenseTree[catName].subs[subName] || 0) + t.amount;
       }
     });
 
-    const incomeKeys = Object.keys(incomeMap);
-    const expenseKeys = Object.keys(expenseMap);
-    
-    const duplicates = new Set(incomeKeys.filter(k => expenseKeys.includes(k)));
-    if (incomeMap['Nieznana']) duplicates.add('Nieznana');
-    if (incomeMap['Inne']) duplicates.add('Inne');
-
-    const safeIncomeMap: Record<string, number> = {};
-    const safeExpenseMap: Record<string, number> = {};
-    const safeExpenseIdMap: Record<string, string> = {};
-
-    incomeKeys.forEach(k => {
-        const newKey = duplicates.has(k) ? `${k} (Wpływ)` : k;
-        safeIncomeMap[newKey] = incomeMap[k];
-    });
-
-    expenseKeys.forEach(k => {
-        const newKey = duplicates.has(k) ? `${k} (Wydatek)` : k;
-        safeExpenseMap[newKey] = expenseMap[k];
-        if (expenseIdMap[k]) safeExpenseIdMap[newKey] = expenseIdMap[k];
-    });
-
-    const totalAllocated = Object.values(expenseMap).reduce((sum, val) => sum + val, 0);
+    // --- Calculate Balances ---
+    const totalAllocated = Object.values(expenseTree).reduce((sum, item) => sum + item.total, 0);
     const balance = totalIncome - totalAllocated;
     const hasSurplus = balance > 0.01;
     const hasDeficit = balance < -0.01;
     const deficitAmount = Math.abs(balance);
 
-    // Sorting Logic
-    const sortedIncomeKeys = Object.keys(safeIncomeMap).sort((a, b) => safeIncomeMap[b] - safeIncomeMap[a]);
-    
-    const allExpenseKeys = Object.keys(safeExpenseMap);
-    
-    // Helper to sort expenses: By Category Name first (to group subcats), then by Value
-    const sortExpenseKeys = (keys: string[]) => {
-        return keys.sort((a, b) => {
-            const catIdA = safeExpenseIdMap[a];
-            const catIdB = safeExpenseIdMap[b];
-            
-            // In Category mode, catId is enough. In Subcategory mode, grouping by catId keeps them together.
-            if (viewMode === 'SUBCATEGORY' && catIdA !== catIdB) {
-                // Find category names to sort alphabetically
-                const catA = categories.find(c => c.id === catIdA);
-                const catB = categories.find(c => c.id === catIdB);
-                return (catA?.name || '').localeCompare(catB?.name || '');
-            }
-            
-            // If same category (or Category Mode), sort by value descending
-            return safeExpenseMap[b] - safeExpenseMap[a];
-        });
+    // --- Build Node List ---
+    const nodes: any[] = [];
+    const links: any[] = [];
+
+    // Helper to get index
+    const addNode = (node: any) => {
+        const existing = nodes.findIndex(n => n.name === node.name);
+        if (existing !== -1) return existing;
+        nodes.push(node);
+        return nodes.length - 1;
     };
 
-    const savingsKeys = sortExpenseKeys(allExpenseKeys.filter(key => {
-        const catId = safeExpenseIdMap[key];
-        const cat = categories.find(c => c.id === catId);
-        return cat?.isIncludedInSavings;
-    }));
-
-    const regularExpenseKeys = sortExpenseKeys(allExpenseKeys.filter(key => {
-        const catId = safeExpenseIdMap[key];
-        const cat = categories.find(c => c.id === catId);
-        return !cat?.isIncludedInSavings;
-    }));
-
-    // Construct Node List
-    const nodeList = [
-      // 1. Incomes
-      ...sortedIncomeKeys.map(name => ({ name, displayName: name, color: '#22c55e', isInteractable: false, type: 'INCOME' })), 
-      
-      // 2. Deficit
-      ...(hasDeficit ? [{ name: 'Deficyt (Z oszczędności)', displayName: 'Deficyt (Z oszczędności)', color: '#f87171', isInteractable: false, type: 'DEFICIT' }] : []),
-
-      // 3. Budget Center
-      { name: 'Budżet', displayName: 'Budżet', color: '#0f172a', isInteractable: false, type: 'BUDGET' }, 
-      
-      // 4. Targets
-      ...(hasSurplus ? [{ name: 'Dostępne Środki', displayName: 'Dostępne Środki', color: '#6366f1', isInteractable: false, type: 'SURPLUS' }] : []),
-      
-      ...savingsKeys.map(name => {
-         const rawName = name.replace(' (Wydatek)', '');
-         const catId = safeExpenseIdMap[name];
-         const cat = categories.find(c => c.id === catId);
-         
-         // In SUBCATEGORY mode, name is "Cat: Sub". We want to display "Sub".
-         let displayName = rawName;
-         if (viewMode === 'SUBCATEGORY' && rawName.includes(': ')) {
-             displayName = rawName.split(': ')[1];
-         }
-
-         return { 
-             name, 
-             displayName,
-             color: cat ? cat.color : '#94a3b8', 
-             isInteractable: viewMode === 'CATEGORY', // Only interactable in Category mode
-             categoryId: catId,
-             type: 'SAVINGS'
-         };
-      }),
-
-      ...regularExpenseKeys.map(name => {
-         const rawName = name.replace(' (Wydatek)', '');
-         const catId = safeExpenseIdMap[name];
-         const cat = categories.find(c => c.id === catId);
-
-         let displayName = rawName;
-         if (viewMode === 'SUBCATEGORY' && rawName.includes(': ')) {
-             displayName = rawName.split(': ')[1];
-         }
-
-         return { 
-             name, 
-             displayName,
-             color: cat ? cat.color : '#94a3b8', 
-             isInteractable: viewMode === 'CATEGORY',
-             categoryId: catId,
-             type: 'EXPENSE'
-         };
-      }),
-    ];
-
-    const linkList: any[] = [];
-    
-    // Indices
-    const deficitIndex = hasDeficit ? sortedIncomeKeys.length : -1;
-    const budgetIndex = sortedIncomeKeys.length + (hasDeficit ? 1 : 0);
-    
-    // Links: Income -> Budget
-    sortedIncomeKeys.forEach((name, i) => {
-       linkList.push({ source: i, target: budgetIndex, value: safeIncomeMap[name] });
+    // 1. Incomes
+    Object.keys(incomeMap).sort((a,b) => incomeMap[b] - incomeMap[a]).forEach(name => {
+        addNode({ name: `${name} (Inc)`, displayName: name, color: '#22c55e', type: 'INCOME', value: incomeMap[name] });
     });
 
+    // 2. Deficit
     if (hasDeficit) {
-        linkList.push({ source: deficitIndex, target: budgetIndex, value: deficitAmount });
+        addNode({ name: 'Deficyt', displayName: 'Deficyt', color: '#f87171', type: 'DEFICIT', value: deficitAmount });
     }
 
-    let targetStartIndex = budgetIndex + 1;
+    // 3. Budget
+    // 'value' is used by D3 to size the node (must match flows). 
+    // 'realValue' is used for display (user logic).
+    const budgetD3Value = hasDeficit ? totalAllocated : totalIncome;
+    
+    const budgetIndex = addNode({ 
+        name: 'Budżet', 
+        displayName: 'Budżet', 
+        color: '#0f172a', 
+        type: 'BUDGET', 
+        value: budgetD3Value, 
+        realValue: totalIncome 
+    });
 
-    // Link: Budget -> Surplus
+    // 4. Surplus
     if (hasSurplus) {
-        linkList.push({ source: budgetIndex, target: targetStartIndex, value: balance });
-        targetStartIndex++;
+        const surplusIndex = addNode({ name: 'Nadwyżka', displayName: 'Dostępne Środki', color: '#6366f1', type: 'SURPLUS', value: balance });
+        links.push({ source: budgetIndex, target: surplusIndex, value: balance });
     }
 
-    // Links: Budget -> Savings
-    savingsKeys.forEach((name) => {
-        linkList.push({ source: budgetIndex, target: targetStartIndex, value: safeExpenseMap[name] });
-        targetStartIndex++;
+    // --- Process Expenses ---
+    // Sort categories: Savings first, then largest expenses
+    const sortedCatKeys = Object.keys(expenseTree).sort((a, b) => {
+        // Savings priority
+        if (expenseTree[a].isSavings && !expenseTree[b].isSavings) return -1;
+        if (!expenseTree[a].isSavings && expenseTree[b].isSavings) return 1;
+        // Then by amount
+        return expenseTree[b].total - expenseTree[a].total;
     });
 
-    // Links: Budget -> Regular Expenses
-    regularExpenseKeys.forEach((name) => {
-        linkList.push({ source: budgetIndex, target: targetStartIndex, value: safeExpenseMap[name] });
-        targetStartIndex++;
+    sortedCatKeys.forEach(catName => {
+        const catData = expenseTree[catName];
+        
+        // Add Category Node
+        const catNodeName = `CAT:${catName}`; // Unique internal name
+        const catIndex = addNode({ 
+            name: catNodeName, 
+            displayName: catName, 
+            color: catData.color, 
+            type: catData.isSavings ? 'SAVINGS' : 'EXPENSE',
+            categoryId: catData.catId,
+            isInteractable: viewMode === 'CATEGORY', // Only clickable in Main view
+            value: catData.total
+        });
+
+        // Link Budget -> Category
+        links.push({ source: budgetIndex, target: catIndex, value: catData.total });
+
+        // If Detailed View -> Add Subcategories flowing FROM Category
+        if (viewMode === 'SUBCATEGORY') {
+            const sortedSubKeys = Object.keys(catData.subs).sort((a, b) => catData.subs[b] - catData.subs[a]);
+            
+            sortedSubKeys.forEach(subName => {
+                const subValue = catData.subs[subName];
+                const subNodeName = `SUB:${catName}:${subName}`; // Unique internal name
+                
+                const subIndex = addNode({ 
+                    name: subNodeName, 
+                    displayName: subName, 
+                    color: catData.color, // Inherit category color
+                    type: 'SUB',
+                    isInteractable: false,
+                    value: subValue
+                });
+
+                // Link Category -> Subcategory
+                links.push({ source: catIndex, target: subIndex, value: subValue });
+            });
+        }
     });
 
-    return { nodes: nodeList, links: linkList, isDrillDown: false };
+    // Links: Income -> Budget
+    Object.keys(incomeMap).forEach(name => {
+        const sourceIdx = nodes.findIndex(n => n.name === `${name} (Inc)`);
+        if (sourceIdx !== -1) {
+            links.push({ source: sourceIdx, target: budgetIndex, value: incomeMap[name] });
+        }
+    });
+
+    // Link: Deficit -> Budget
+    if (hasDeficit) {
+        const defIdx = nodes.findIndex(n => n.type === 'DEFICIT');
+        if (defIdx !== -1) {
+            links.push({ source: defIdx, target: budgetIndex, value: deficitAmount });
+        }
+    }
+
+    return { nodes, links, isDrillDown: false };
   }, [transactions, categories, drillDownCategoryId, viewMode]);
 
   const layoutData = useMemo(() => {
@@ -279,71 +248,94 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     const width = Math.max(1, dimensions.width - margin.left - margin.right);
     const height = Math.max(1, dimensions.height - margin.top - margin.bottom);
 
+    // If detailed view, reduce padding to fit more nodes
+    const nodePadding = viewMode === 'SUBCATEGORY' ? 8 : 12;
+
     const sankeyGenerator = d3Sankey()
       .nodeWidth(16)
-      .nodePadding(12)
+      .nodePadding(nodePadding)
       .extent([[0, 0], [width, height]])
-      .nodeAlign(sankeyLeft)
-      .nodeSort(null);
+      .nodeAlign(sankeyLeft) // Left align ensures hierarchical flow (Level 1 -> 2 -> 3)
+      .nodeSort(null); // Keep our sorting
 
     const nodes = rawNodes.map(d => ({ ...d }));
     const links = rawLinks.map(d => ({ ...d }));
 
     const { nodes: computedNodes, links: computedLinks } = sankeyGenerator({ nodes, links });
 
-    // --- MANUAL CENTERING (Only in Overview Mode) ---
-    if (!isDrillDown) {
-        const budgetNode = computedNodes.find((n: any) => n.name === 'Budżet');
+    // --- MANUAL ADJUSTMENTS ---
+    // In CATEGORY mode, we center the Budget node to make it look like a funnel
+    if (!isDrillDown && viewMode === 'CATEGORY') {
+        const budgetNode = computedNodes.find((n: any) => n.type === 'BUDGET');
         if (budgetNode) {
            const nodeH = budgetNode.y1 - budgetNode.y0;
            const targetY = (height - nodeH) / 2;
            const dy = targetY - budgetNode.y0;
+           
+           // Shift Budget
            budgetNode.y0 += dy;
            budgetNode.y1 += dy;
-           computedLinks.filter((l: any) => l.source.index === budgetNode.index).forEach((l: any) => l.y0 += dy);
-           computedLinks.filter((l: any) => l.target.index === budgetNode.index).forEach((l: any) => l.y1 += dy);
-        }
+           
+           // Shift its inputs (Income/Deficit)
+           const inputs = computedLinks.filter((l: any) => l.target.index === budgetNode.index).map((l: any) => l.source);
+           const uniqueInputs = Array.from(new Set(inputs));
+           
+           if (uniqueInputs.length > 0) {
+               // Calculate input group bounds
+               const minInY = Math.min(...uniqueInputs.map((n: any) => n.y0));
+               const maxInY = Math.max(...uniqueInputs.map((n: any) => n.y1));
+               const inH = maxInY - minInY;
+               const targetInY = (height - inH) / 2;
+               const dyIn = targetInY - minInY;
+               
+               uniqueInputs.forEach((n: any) => {
+                   n.y0 += dyIn; n.y1 += dyIn;
+                   // Adjust outgoing links from inputs
+                   computedLinks.filter((l: any) => l.source.index === n.index).forEach((l: any) => l.y0 += dyIn);
+               });
+           }
 
-        const leftSideNodes = computedNodes.filter((n: any) => 
-           computedLinks.some((l: any) => l.source.index === n.index && l.target.name === 'Budżet')
-        );
-        if (leftSideNodes.length > 0) {
-           const minY = Math.min(...leftSideNodes.map((n: any) => n.y0));
-           const maxY = Math.max(...leftSideNodes.map((n: any) => n.y1));
-           const grpHeight = maxY - minY;
-           const targetY = (height - grpHeight) / 2;
-           const dy = targetY - minY;
-           leftSideNodes.forEach((n: any) => {
-              n.y0 += dy; n.y1 += dy;
-              computedLinks.filter((l: any) => l.source.index === n.index).forEach((l: any) => l.y0 += dy);
-           });
+           // Adjust links connected to budget
+           computedLinks.filter((l: any) => l.target.index === budgetNode.index).forEach((l: any) => l.y1 += dy); // Income -> Budget
+           computedLinks.filter((l: any) => l.source.index === budgetNode.index).forEach((l: any) => l.y0 += dy); // Budget -> Exp
         }
     }
     
+    // Apply margins
     computedNodes.forEach((n: any) => { n.x0 += margin.left; n.x1 += margin.left; n.y0 += margin.top; n.y1 += margin.top; });
     computedLinks.forEach((l: any) => { l.y0 += margin.top; l.y1 += margin.top; });
 
     return { nodes: computedNodes, links: computedLinks, width };
-  }, [rawNodes, rawLinks, dimensions, isDrillDown]);
+  }, [rawNodes, rawLinks, dimensions, isDrillDown, viewMode]);
 
   const getLinkColor = (link: any) => {
       if (isDrillDown) return link.source.color || '#cbd5e1';
-      if (link.target.name === 'Budżet') {
-          if (link.source.type === 'DEFICIT') return '#f87171';
-          return '#22c55e';
+      
+      // Standard Flow: Income -> Budget
+      if (link.target.type === 'BUDGET') {
+          if (link.source.type === 'DEFICIT') return '#f87171'; // Red
+          return '#22c55e'; // Green
       }
-      if (link.source.name === 'Budżet') {
-          if (link.target.name === 'Dostępne Środki') return '#22c55e';
-          if (link.target.type === 'SAVINGS') return '#3b82f6';
-          return '#ef4444';
+
+      // Budget -> Category
+      if (link.source.type === 'BUDGET') {
+          if (link.target.type === 'SURPLUS') return '#6366f1';
+          return link.target.color; // Use Category Color
       }
+
+      // Category -> Subcategory
+      if (link.source.type === 'EXPENSE' || link.source.type === 'SAVINGS') {
+          return link.source.color; // Inherit Category Color
+      }
+
       return '#e2e8f0';
   };
 
   return (
-    <div className="w-full flex flex-col h-[540px]">
+    // Fixed height container
+    <div className="w-full flex flex-col" style={{ height: '650px' }}>
         {/* Header */}
-        <div className="flex items-center justify-between mb-2 h-8">
+        <div className="flex items-center justify-between mb-2 h-8 shrink-0">
             {isDrillDown ? (
                 <button 
                     onClick={() => setDrillDownCategoryId(null)}
@@ -387,7 +379,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                               d={path || ''} 
                               fill="none" 
                               stroke={strokeColor}
-                              strokeOpacity={0.6}
+                              strokeOpacity={viewMode === 'SUBCATEGORY' && link.source.type !== 'BUDGET' ? 0.4 : 0.6}
                               strokeWidth={Math.max(1, link.width)} 
                               className="hover:stroke-opacity-80 transition-all duration-300"
                            >
@@ -400,7 +392,12 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                         const height = Math.max(node.y1 - node.y0, 2);
                         const width = node.x1 - node.x0;
                         const isInteractable = node.isInteractable && !isDrillDown;
-                        const showLabel = height > 16; 
+                        // Lower threshold to 8px to show more labels
+                        const showLabel = height > 8; 
+                        
+                        // Use realValue if present (e.g. for Budget node with deficit), otherwise standard value
+                        const displayValue = node.realValue !== undefined ? node.realValue : node.value;
+
                         const isLeft = node.x0 < dimensions.width / 2;
                         const textX = isLeft ? node.x1 + 6 : node.x0 - 6;
                         const textAnchor = isLeft ? 'start' : 'end';
@@ -420,30 +417,30 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                                  x={node.x0} y={node.y0} height={height} width={width} 
                                  fill={node.color} rx={4}
                               >
-                                 <title>{`${node.displayName || node.name}: ${formatValue(node.value)}`}</title>
+                                 <title>{`${node.displayName || node.name}: ${formatValue(displayValue)}`}</title>
                               </rect>
                               
                               {showLabel && (
                                 <>
                                   <text
                                      x={textX}
-                                     y={(node.y1 + node.y0) / 2}
+                                     y={(node.y1 + node.y0) / 2 - 6}
                                      dy="0.35em"
                                      textAnchor={textAnchor}
-                                     fontSize={12} fontWeight={600} fill="#1e293b"
+                                     fontSize={11} fontWeight={600} fill="#1e293b"
                                      className="pointer-events-none"
                                   >
                                      {node.displayName || node.name}
                                   </text>
                                   <text
                                      x={textX}
-                                     y={(node.y1 + node.y0) / 2 + 14}
+                                     y={(node.y1 + node.y0) / 2 + 6}
                                      dy="0.35em"
                                      textAnchor={textAnchor}
                                      fontSize={10} fill="#64748b"
                                      className={`pointer-events-none`}
                                   >
-                                     {formatValue(node.value)}
+                                     {formatValue(displayValue)}
                                   </text>
                                 </>
                               )}
