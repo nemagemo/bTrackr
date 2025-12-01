@@ -10,11 +10,11 @@ import { ComboChart, DifferenceChart } from './D3Charts';
 import { SpendingVelocity } from './SpendingVelocity';
 import { DayOfWeekStats } from './DayOfWeekStats';
 import { BudgetPulse } from './BudgetPulse';
+import { TopMerchants } from './TopMerchants';
 
 interface AnalysisViewProps {
   transactions: Transaction[];
   categories: CategoryItem[];
-  includeBalanceInSavings?: boolean;
   isPrivateMode?: boolean;
 }
 
@@ -22,7 +22,7 @@ export type PeriodType = 'ALL' | 'YEAR' | 'QUARTER' | 'MONTH';
 export type AggregationMode = 'YEARLY' | 'QUARTERLY' | 'MONTHLY';
 type FinancialHealthViewMode = 'COMBO' | 'DIFFERENCE';
 
-export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, categories, includeBalanceInSavings = false, isPrivateMode }) => {
+export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, categories, isPrivateMode }) => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [periodType, setPeriodType] = useState<PeriodType>('ALL');
   const [periodValue, setPeriodValue] = useState<number>(0); 
@@ -202,15 +202,11 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
      // Post-calculate Rates
      buckets.forEach(b => {
         let totalSavings = b.savings;
-        const balance = b.income - b.expense - b.savings;
-        if (includeBalanceInSavings && balance > 0) {
-           totalSavings += balance;
-        }
         b.savingsRate = b.income > 0 ? (totalSavings / b.income) * 100 : 0;
      });
 
      return buckets;
-  }, [filteredTransactions, periodType, periodValue, selectedYear, categories, includeBalanceInSavings, historyAggregation, yearAggregation]);
+  }, [filteredTransactions, periodType, periodValue, selectedYear, categories, historyAggregation, yearAggregation]);
 
   const stats = useMemo(() => {
     const totalIncome = filteredTransactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + t.amount, 0);
@@ -226,15 +222,11 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
     }).reduce((sum, t) => sum + t.amount, 0);
 
     const balance = totalIncome - totalConsumption - activeSavings; 
-    let totalSavingsForRate = activeSavings;
-    if (includeBalanceInSavings && balance > 0) {
-      totalSavingsForRate += balance;
-    }
-
+    const totalSavingsForRate = activeSavings;
     const savingsRate = totalIncome > 0 ? (totalSavingsForRate / totalIncome) * 100 : 0;
 
     return { totalIncome, totalConsumption, balance, savingsRate };
-  }, [filteredTransactions, categories, includeBalanceInSavings]);
+  }, [filteredTransactions, categories]);
 
   const getPeriodLabel = () => {
      if (periodType === 'ALL') return 'Cała historia';
@@ -402,9 +394,10 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
       {/* Spending Velocity - Full Width */}
       <SpendingVelocity transactions={transactions} currentYear={selectedYear} isPrivateMode={isPrivateMode} />
 
-      {/* Other Analytics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Other Analytics Grid (3 columns on LG) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <DayOfWeekStats transactions={filteredTransactions} isPrivateMode={isPrivateMode} />
+          <TopMerchants transactions={filteredTransactions} isPrivateMode={isPrivateMode} />
           <BudgetPulse transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />
       </div>
 

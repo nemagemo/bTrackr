@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Wallet, PieChart as PieChartIcon, ArrowDownCircle, ArrowUpCircle, Sparkles, LayoutDashboard, LineChart, History, Settings, Eye, EyeOff } from 'lucide-react';
-import { Transaction, TransactionType, CategoryItem, SubcategoryItem } from './types';
+import { Transaction, TransactionType, CategoryItem, SubcategoryItem, BackupData } from './types';
 import { DEFAULT_CATEGORIES, SYSTEM_IDS, CURRENCY_FORMATTER, getCategoryName } from './constants';
 import { StatCard } from './components/StatCard';
 import { TransactionForm } from './components/TransactionForm';
@@ -28,12 +29,6 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('btrackr_transactions');
     return saved ? JSON.parse(saved) : [];
-  });
-
-  // Settings State
-  const [includeBalanceInSavings, setIncludeBalanceInSavings] = useState<boolean>(() => {
-    const saved = localStorage.getItem('btrackr_cfg_savings_balance');
-    return saved ? JSON.parse(saved) : false;
   });
 
   // Private Mode State
@@ -70,10 +65,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('btrackr_categories', JSON.stringify(categories));
   }, [categories]);
-
-  useEffect(() => {
-    localStorage.setItem('btrackr_cfg_savings_balance', JSON.stringify(includeBalanceInSavings));
-  }, [includeBalanceInSavings]);
 
   useEffect(() => {
     localStorage.setItem('btrackr_private_mode', JSON.stringify(isPrivateMode));
@@ -256,8 +247,32 @@ const App: React.FC = () => {
     if (clearHistory) {
       setTransactions(importedTxs);
     } else {
-      setTransactions((prev) => [...importedTxs, ...prev]);
+      // Smart Merge (Append)
+      // Check if exact same transaction (Amount, Date, Desc) already exists to avoid duplicates
+      setTransactions((prev) => {
+          const existingSignatures = new Set(prev.map(t => 
+             `${t.date}_${t.amount}_${t.description.trim().toLowerCase()}`
+          ));
+          
+          const uniqueNewTxs = importedTxs.filter(t => 
+             !existingSignatures.has(`${t.date}_${t.amount}_${t.description.trim().toLowerCase()}`)
+          );
+
+          if (importedTxs.length > uniqueNewTxs.length) {
+              // Optional: console.log(`Skipped ${importedTxs.length - uniqueNewTxs.length} duplicates.`);
+          }
+
+          return [...uniqueNewTxs, ...prev];
+      });
     }
+  };
+
+  const handleRestoreBackup = (backup: BackupData) => {
+     setCategories(backup.categories);
+     setTransactions(backup.transactions);
+     if (backup.settings) {
+        setIsPrivateMode(backup.settings.isPrivateMode);
+     }
   };
 
   // --- SPLIT TRANSACTION LOGIC ---
@@ -520,7 +535,6 @@ const App: React.FC = () => {
           <AnalysisView 
             transactions={transactions} 
             categories={categories} 
-            includeBalanceInSavings={includeBalanceInSavings}
             isPrivateMode={isPrivateMode}
           />
         )}
@@ -545,13 +559,18 @@ const App: React.FC = () => {
             onUpdateCategories={setCategories} 
             onDeleteCategory={handleDeleteCategory}
             onDeleteSubcategory={handleDeleteSubcategory}
-            includeBalanceInSavings={includeBalanceInSavings}
-            onToggleBalanceInSavings={setIncludeBalanceInSavings}
           />
         )}
       </main>
 
-      <ImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} onImport={handleImportTransactions} hasExistingTransactions={transactions.length > 0} categories={categories} />
+      <ImportModal 
+         isOpen={isImportModalOpen} 
+         onClose={() => setIsImportModalOpen(false)} 
+         onImport={handleImportTransactions} 
+         onRestore={handleRestoreBackup}
+         hasExistingTransactions={transactions.length > 0} 
+         categories={categories} 
+      />
       <EditTransactionModal isOpen={!!editingTransaction} transaction={editingTransaction} onClose={() => setEditingTransaction(null)} onSave={handleUpdateTransaction} onDelete={requestDeleteTransaction} categories={categories} />
       <BulkCategoryModal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} transactions={transactions} onUpdate={handleBulkCategoryUpdate} categories={categories} />
       <ConfirmModal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} onConfirm={() => { confirmModal.action(); setConfirmModal(prev => ({ ...prev, isOpen: false })); }} title={confirmModal.title} message={confirmModal.message} />

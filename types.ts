@@ -42,3 +42,13 @@ export interface ChartDataPoint {
   value: number;
   color: string;
 }
+
+export interface BackupData {
+  version: number;
+  timestamp: string;
+  categories: CategoryItem[];
+  transactions: Transaction[];
+  settings: {
+    isPrivateMode: boolean;
+  };
+}

@@ -1,12 +1,10 @@
-
-
-
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target } from 'lucide-react';
-import { CategoryItem, SubcategoryItem, TransactionType, Transaction } from '../types';
+import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson } from 'lucide-react';
+import { CategoryItem, SubcategoryItem, TransactionType, Transaction, BackupData } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { TransferModal } from './TransferModal';
 import { CURRENCY_FORMATTER } from '../constants';
+import { Button } from './Button';
 
 interface SettingsViewProps {
   categories: CategoryItem[];
@@ -14,8 +12,6 @@ interface SettingsViewProps {
   onUpdateCategories: (categories: CategoryItem[]) => void;
   onDeleteCategory: (id: string, targetCategoryId?: string, targetSubcategoryId?: string) => void;
   onDeleteSubcategory: (catId: string, subId: string) => void;
-  includeBalanceInSavings: boolean;
-  onToggleBalanceInSavings: (val: boolean) => void;
 }
 
 // Mini-component for adding subcategories with better UX
@@ -88,9 +84,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   transactions,
   onUpdateCategories, 
   onDeleteCategory, 
-  onDeleteSubcategory,
-  includeBalanceInSavings,
-  onToggleBalanceInSavings
+  onDeleteSubcategory
 }) => {
   const [activeTab, setActiveTab] = useState<TransactionType>(TransactionType.EXPENSE);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -188,34 +182,55 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     });
   };
 
+  const handleExportBackup = () => {
+    const isPrivateMode = JSON.parse(localStorage.getItem('btrackr_private_mode') || 'false');
+    
+    const backup: BackupData = {
+      version: 1,
+      timestamp: new Date().toISOString(),
+      categories: categories,
+      transactions: transactions,
+      settings: {
+        isPrivateMode: isPrivateMode
+      }
+    };
+
+    const dataStr = JSON.stringify(backup, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bTrackr_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
+      
+      {/* Backup Section */}
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 rounded-2xl shadow-sm text-white flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <FileJson size={20} className="text-indigo-400" /> Kopia Zapasowa
+          </h2>
+          <p className="text-sm text-slate-300 mt-1">
+            Pobierz pełny stan aplikacji (kategorie, limity, historię) w pliku JSON.
+          </p>
+        </div>
+        <Button 
+           onClick={handleExportBackup} 
+           variant="secondary"
+           className="bg-white/10 text-white border-white/20 hover:bg-white/20 whitespace-nowrap"
+        >
+           <Download size={16} /> Pobierz Backup (JSON)
+        </Button>
+      </div>
+
       <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100">
         <h2 className="text-xl font-bold text-slate-900 mb-4">Zarządzanie Kategoriami</h2>
         
-        {/* Savings Rate Configuration */}
-        <div className="mb-8 p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-           <h3 className="font-semibold text-indigo-900 mb-2 flex items-center gap-2">
-             <PiggyBank size={18} /> Konfiguracja Stopy Oszczędności
-           </h3>
-           <p className="text-sm text-indigo-700 mb-3">
-             Zaznacz poniżej kategorie wydatków, które mają być traktowane jako oszczędności/inwestycje.
-           </p>
-           <div className="flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                id="includeBalance"
-                checked={includeBalanceInSavings}
-                onChange={(e) => onToggleBalanceInSavings(e.target.checked)}
-                className="w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer bg-white accent-indigo-600"
-                style={{ colorScheme: 'light' }}
-              />
-              <label htmlFor="includeBalance" className="text-sm font-medium text-indigo-900 cursor-pointer select-none">
-                Wliczaj nadwyżkę finansową (Dostępne Środki) do stopy oszczędności
-              </label>
-           </div>
-        </div>
-
         {/* Tabs */}
         <div className="flex bg-slate-100 p-1 rounded-lg w-full max-w-md mb-6">
           <button
