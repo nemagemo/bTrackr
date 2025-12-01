@@ -49,7 +49,14 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
                 {transaction.type === TransactionType.INCOME ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-800">{transaction.description}</p>
+                <div className="flex items-center gap-2">
+                   <p className="text-sm font-semibold text-slate-800">{transaction.description}</p>
+                   {transaction.tags && transaction.tags.map(tag => (
+                      <span key={tag} className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold">
+                         #{tag}
+                      </span>
+                   ))}
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] uppercase tracking-wider font-medium text-slate-400">
                     {categoryName}

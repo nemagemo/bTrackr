@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson, Database } from 'lucide-react';
 import { CategoryItem, SubcategoryItem, TransactionType, Transaction, BackupData } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { TransferModal } from './TransferModal';
@@ -12,6 +12,7 @@ interface SettingsViewProps {
   onUpdateCategories: (categories: CategoryItem[]) => void;
   onDeleteCategory: (id: string, targetCategoryId?: string, targetSubcategoryId?: string) => void;
   onDeleteSubcategory: (catId: string, subId: string) => void;
+  onLoadDemo?: () => void;
 }
 
 // Mini-component for adding subcategories with better UX
@@ -84,7 +85,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   transactions,
   onUpdateCategories, 
   onDeleteCategory, 
-  onDeleteSubcategory
+  onDeleteSubcategory,
+  onLoadDemo
 }) => {
   const [activeTab, setActiveTab] = useState<TransactionType>(TransactionType.EXPENSE);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -213,19 +215,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 rounded-2xl shadow-sm text-white flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
-            <FileJson size={20} className="text-indigo-400" /> Kopia Zapasowa
+            <FileJson size={20} className="text-indigo-400" /> Kopia Zapasowa i Demo
           </h2>
           <p className="text-sm text-slate-300 mt-1">
-            Pobierz pełny stan aplikacji (kategorie, limity, historię) w pliku JSON.
+            Zarządzaj danymi aplikacji. Eksportuj historię lub załaduj przykładowe dane.
           </p>
         </div>
-        <Button 
-           onClick={handleExportBackup} 
-           variant="secondary"
-           className="bg-white/10 text-white border-white/20 hover:bg-white/20 whitespace-nowrap"
-        >
-           <Download size={16} /> Pobierz Backup (JSON)
-        </Button>
+        <div className="flex gap-2">
+           {onLoadDemo && (
+              <Button 
+                 onClick={onLoadDemo} 
+                 className="bg-indigo-600 hover:bg-indigo-700 text-white border-none whitespace-nowrap"
+              >
+                 <Database size={16} /> Załaduj Demo (2020-2025)
+              </Button>
+           )}
+           <Button 
+              onClick={handleExportBackup} 
+              variant="secondary"
+              className="bg-white/10 text-white border-white/20 hover:bg-white/20 whitespace-nowrap"
+           >
+              <Download size={16} /> Backup (JSON)
+           </Button>
+        </div>
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100">

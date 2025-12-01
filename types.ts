@@ -29,6 +29,7 @@ export interface Transaction {
   categoryId: string; // References CategoryItem.id
   subcategoryId?: string; // References SubcategoryItem.id
   date: string;
+  tags?: string[]; // New: Independent tagging system
 }
 
 export interface FinancialSummary {

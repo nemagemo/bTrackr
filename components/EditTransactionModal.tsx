@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Trash2 } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button } from './Button';
+import { TagInput } from './TagInput';
 
 interface EditTransactionModalProps {
   transaction: Transaction | null;
@@ -11,6 +12,7 @@ interface EditTransactionModalProps {
   onSave: (updatedTransaction: Transaction) => void;
   onDelete: (id: string) => void;
   categories: CategoryItem[];
+  allTags?: string[];
 }
 
 export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ 
@@ -19,7 +21,8 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   onClose, 
   onSave,
   onDelete,
-  categories
+  categories,
+  allTags = []
 }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -27,6 +30,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
   const [categoryId, setCategoryId] = useState<string>('');
   const [subcategoryId, setSubcategoryId] = useState<string>('');
+  const [tags, setTags] = useState<string[]>([]);
 
   const availableCategories = categories.filter(c => c.type === type);
   const currentCategory = categories.find(c => c.id === categoryId);
@@ -41,13 +45,12 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       setType(transaction.type);
       setCategoryId(transaction.categoryId);
       setSubcategoryId(transaction.subcategoryId || '');
+      setTags(transaction.tags || []);
     }
   }, [transaction]);
 
   useEffect(() => {
     if (!transaction || !isOpen) return;
-    
-    // Validate if current categoryId is valid for selected type
     const isValid = availableCategories.some(c => c.id === categoryId);
     if (!isValid && availableCategories.length > 0) {
        setCategoryId(availableCategories[0].id);
@@ -69,6 +72,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       categoryId,
       subcategoryId: subcategoryId || undefined,
       date: new Date(date).toISOString(),
+      tags
     });
     onClose();
   };
@@ -177,6 +181,8 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
               )}
             </div>
           </div>
+
+          <TagInput tags={tags} onChange={setTags} existingTags={allTags} />
 
           <div className="flex gap-3 pt-4">
              <Button type="button" variant="danger" onClick={handleDelete} className="px-3">

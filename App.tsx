@@ -70,6 +70,13 @@ const App: React.FC = () => {
     localStorage.setItem('btrackr_private_mode', JSON.stringify(isPrivateMode));
   }, [isPrivateMode]);
 
+  // Collect all unique tags for autocomplete
+  const allTags = useMemo(() => {
+     const tags = new Set<string>();
+     transactions.forEach(t => t.tags?.forEach(tag => tags.add(tag)));
+     return Array.from(tags).sort();
+  }, [transactions]);
+
   // Migration Logic
   useEffect(() => {
     const performMigration = () => {
@@ -433,6 +440,16 @@ const App: React.FC = () => {
     setCategories(updatedCategories.filter(c => c.id !== categoryId));
   };
 
+  // Demo Data Handler
+  const handleLoadDemo = () => {
+     import('./utils/demoData').then(({ generateDemoTransactions }) => {
+        const demoTxs = generateDemoTransactions(categories);
+        setTransactions(demoTxs);
+        // Also update local storage immediately for robustness
+        localStorage.setItem('btrackr_transactions', JSON.stringify(demoTxs));
+     });
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
       <header className="bg-white border-b border-slate-100 sticky top-0 z-40 backdrop-blur-md bg-white/80">
@@ -445,37 +462,21 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto">
-            <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              <LayoutDashboard size={16} /> <span className="hidden sm:inline">Pulpit</span>
-            </button>
-            <button onClick={() => setActiveTab('analysis')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'analysis' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              <LineChart size={16} /> <span className="hidden sm:inline">Analiza</span>
-            </button>
-             <button onClick={() => setActiveTab('history')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              <History size={16} /> <span className="hidden sm:inline">Historia</span>
-            </button>
-            <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'settings' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              <Settings size={16} /> <span className="hidden sm:inline">Ustawienia</span>
-            </button>
+            <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><LayoutDashboard size={16} /> <span className="hidden sm:inline">Pulpit</span></button>
+            <button onClick={() => setActiveTab('analysis')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'analysis' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><LineChart size={16} /> <span className="hidden sm:inline">Analiza</span></button>
+             <button onClick={() => setActiveTab('history')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><History size={16} /> <span className="hidden sm:inline">Historia</span></button>
+            <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'settings' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Settings size={16} /> <span className="hidden sm:inline">Ustawienia</span></button>
           </div>
 
           <div className="flex items-center gap-2">
-             <button 
-                onClick={() => setIsPrivateMode(!isPrivateMode)}
-                className={`p-2 rounded-full transition-colors ${isPrivateMode ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
-                title={isPrivateMode ? "Wyłącz tryb prywatny" : "Włącz tryb prywatny"}
-             >
-                {isPrivateMode ? <EyeOff size={18} /> : <Eye size={18} />}
-             </button>
-
-             <button onClick={handleGetAdvice} disabled={isLoadingAdvice || transactions.length === 0} className="text-xs font-medium bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors flex items-center gap-1.5 disabled:opacity-50">
-               <Sparkles size={14} /> {isLoadingAdvice ? '...' : 'AI'}
-             </button>
+             <button onClick={() => setIsPrivateMode(!isPrivateMode)} className={`p-2 rounded-full transition-colors ${isPrivateMode ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`} title={isPrivateMode ? "Wyłącz tryb prywatny" : "Włącz tryb prywatny"}>{isPrivateMode ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+             <button onClick={handleGetAdvice} disabled={isLoadingAdvice || transactions.length === 0} className="text-xs font-medium bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors flex items-center gap-1.5 disabled:opacity-50"><Sparkles size={14} /> {isLoadingAdvice ? '...' : 'AI'}</button>
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
+        {/* ... (AI Advice rendering same as before) ... */}
         {aiAdvice && (
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 rounded-xl shadow-lg flex items-start gap-3 animate-fade-in">
             <Sparkles size={20} className="mt-1 flex-shrink-0 text-indigo-200" />
@@ -491,20 +492,13 @@ const App: React.FC = () => {
               <StatCard label="Przychody" value={CURRENCY_FORMATTER.format(summary.totalIncome)} icon={<ArrowUpCircle size={20} className="text-green-600" />} colorClass="text-green-600" isPrivateMode={isPrivateMode}/>
               <StatCard label="Wydatki" value={CURRENCY_FORMATTER.format(summary.totalExpense)} icon={<ArrowDownCircle size={20} className="text-red-600" />} colorClass="text-red-600" isPrivateMode={isPrivateMode}/>
             </div>
-
-            {/* BUDGET PULSE - VISIBLE ON DASHBOARD */}
-            <div className="animate-fade-in">
-               <BudgetPulse transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />
-            </div>
-
+            <div className="animate-fade-in"><BudgetPulse transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} /></div>
             <div className="grid grid-cols-1 gap-8">
               <div className="space-y-8">
-                <TransactionForm onAdd={handleAddTransaction} onImportClick={() => setIsImportModalOpen(true)} categories={categories}/>
+                <TransactionForm onAdd={handleAddTransaction} onImportClick={() => setIsImportModalOpen(true)} categories={categories} allTags={allTags}/>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                      Ostatnie operacje <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{transactions.length}</span>
-                    </h2>
+                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">Ostatnie operacje <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{transactions.length}</span></h2>
                     <button onClick={() => setActiveTab('history')} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Zobacz wszystkie</button>
                   </div>
                   <div className="bg-white rounded-2xl border border-slate-100 p-2">
@@ -514,12 +508,13 @@ const App: React.FC = () => {
                             return (
                               <div key={t.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl transition-colors">
                                   <div>
-                                    <p className="font-semibold text-slate-800">{t.description}</p>
+                                    <div className="flex items-center gap-2">
+                                       <p className="font-semibold text-slate-800">{t.description}</p>
+                                       {t.tags && t.tags.length > 0 && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold">#{t.tags[0]}</span>}
+                                    </div>
                                     <p className="text-xs text-slate-400">{cat?.name || 'Inne'}</p>
                                   </div>
-                                  <span className={`${t.type === 'INCOME' ? 'text-green-600 font-bold' : 'text-slate-900 font-bold'} ${isPrivateMode ? 'blur-[5px] select-none' : ''}`}>
-                                    {t.type === 'INCOME' ? '+' : '-'}{CURRENCY_FORMATTER.format(t.amount)}
-                                  </span>
+                                  <span className={`${t.type === 'INCOME' ? 'text-green-600 font-bold' : 'text-slate-900 font-bold'} ${isPrivateMode ? 'blur-[5px] select-none' : ''}`}>{t.type === 'INCOME' ? '+' : '-'}{CURRENCY_FORMATTER.format(t.amount)}</span>
                               </div>
                             )
                         })}
@@ -531,47 +526,13 @@ const App: React.FC = () => {
           </>
         )}
 
-        {activeTab === 'analysis' && (
-          <AnalysisView 
-            transactions={transactions} 
-            categories={categories} 
-            isPrivateMode={isPrivateMode}
-          />
-        )}
-        
-        {activeTab === 'history' && (
-           <HistoryView 
-              transactions={transactions} 
-              categories={categories} 
-              onEdit={setEditingTransaction} 
-              onDelete={requestDeleteTransaction} 
-              onClearAll={requestClearAllTransactions} 
-              onOpenBulkAction={() => setIsBulkModalOpen(true)}
-              onSplit={handleSplitTransaction}
-              isPrivateMode={isPrivateMode}
-           />
-        )}
-        
-        {activeTab === 'settings' && (
-          <SettingsView 
-            categories={categories} 
-            transactions={transactions}
-            onUpdateCategories={setCategories} 
-            onDeleteCategory={handleDeleteCategory}
-            onDeleteSubcategory={handleDeleteSubcategory}
-          />
-        )}
+        {activeTab === 'analysis' && <AnalysisView transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />}
+        {activeTab === 'history' && <HistoryView transactions={transactions} categories={categories} onEdit={setEditingTransaction} onDelete={requestDeleteTransaction} onClearAll={requestClearAllTransactions} onOpenBulkAction={() => setIsBulkModalOpen(true)} onSplit={handleSplitTransaction} isPrivateMode={isPrivateMode} />}
+        {activeTab === 'settings' && <SettingsView categories={categories} transactions={transactions} onUpdateCategories={setCategories} onDeleteCategory={handleDeleteCategory} onDeleteSubcategory={handleDeleteSubcategory} onLoadDemo={handleLoadDemo} />}
       </main>
 
-      <ImportModal 
-         isOpen={isImportModalOpen} 
-         onClose={() => setIsImportModalOpen(false)} 
-         onImport={handleImportTransactions} 
-         onRestore={handleRestoreBackup}
-         hasExistingTransactions={transactions.length > 0} 
-         categories={categories} 
-      />
-      <EditTransactionModal isOpen={!!editingTransaction} transaction={editingTransaction} onClose={() => setEditingTransaction(null)} onSave={handleUpdateTransaction} onDelete={requestDeleteTransaction} categories={categories} />
+      <ImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} onImport={handleImportTransactions} onRestore={handleRestoreBackup} hasExistingTransactions={transactions.length > 0} categories={categories} />
+      <EditTransactionModal isOpen={!!editingTransaction} transaction={editingTransaction} onClose={() => setEditingTransaction(null)} onSave={handleUpdateTransaction} onDelete={requestDeleteTransaction} categories={categories} allTags={allTags} />
       <BulkCategoryModal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} transactions={transactions} onUpdate={handleBulkCategoryUpdate} categories={categories} />
       <ConfirmModal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} onConfirm={() => { confirmModal.action(); setConfirmModal(prev => ({ ...prev, isOpen: false })); }} title={confirmModal.title} message={confirmModal.message} />
     </div>

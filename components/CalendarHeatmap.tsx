@@ -1,7 +1,8 @@
+
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 import { Layers, Combine } from 'lucide-react';
-import { Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 import { PeriodType } from './AnalysisView';
 
@@ -175,15 +176,17 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
 
 interface CalendarHeatmapProps {
   transactions: Transaction[];
+  categories: CategoryItem[];
   year: number;
   periodType: PeriodType;
   isPrivateMode?: boolean;
 }
 
-export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, year, periodType, isPrivateMode }) => {
+export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, categories, year, periodType, isPrivateMode }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [isSplitYears, setIsSplitYears] = useState(true);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('ALL');
 
   // Measure width
   useEffect(() => {
@@ -198,21 +201,27 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
     return () => observer.disconnect();
   }, []);
 
+  // Filter transactions by selected category
+  const filteredTxs = useMemo(() => {
+      if (selectedCategoryId === 'ALL') return transactions;
+      return transactions.filter(t => t.categoryId === selectedCategoryId);
+  }, [transactions, selectedCategoryId]);
+
   // Determine which years to show
   const yearsToShow = useMemo(() => {
      if (periodType === 'ALL') {
-        const years = new Set(transactions.map(t => new Date(t.date).getFullYear()));
+        const years = new Set(filteredTxs.map(t => new Date(t.date).getFullYear()));
         return Array.from(years).sort((a: number, b: number) => b - a); // Descending
      }
      return [year];
-  }, [periodType, year, transactions]);
+  }, [periodType, year, filteredTxs]);
 
   // Pre-calculate data for each year (SPLIT MODE)
   const dataByYear = useMemo(() => {
      const map = new Map<number, Map<string, number>>();
      
      yearsToShow.forEach(y => {
-        const expenses = transactions.filter(t => 
+        const expenses = filteredTxs.filter(t => 
            t.type === TransactionType.EXPENSE && 
            new Date(t.date).getFullYear() === y
         );
@@ -226,7 +235,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
      });
 
      return map;
-  }, [transactions, yearsToShow]);
+  }, [filteredTxs, yearsToShow]);
 
   // Pre-calculate merged data (MERGED MODE)
   const mergedData = useMemo(() => {
@@ -234,7 +243,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
       // Use a leap year as proxy to handle Feb 29th (2024 is a leap year)
       const proxyYear = 2024; 
 
-      transactions.forEach(t => {
+      filteredTxs.forEach(t => {
           if (t.type !== TransactionType.EXPENSE) return;
           
           const d = new Date(t.date);
@@ -248,37 +257,50 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
           dailyTotals.set(proxyDateStr, (dailyTotals.get(proxyDateStr) || 0) + t.amount);
       });
       return dailyTotals;
-  }, [transactions, periodType, year]);
+  }, [filteredTxs, periodType, year]);
 
-  if (yearsToShow.length === 0) return null;
+  if (yearsToShow.length === 0 && selectedCategoryId === 'ALL') return null;
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
         <div>
           <h3 className="font-semibold text-slate-800">Kalendarz Wydatków</h3>
           <p className="text-xs text-slate-400">Intensywność wydatków w poszczególnych dniach</p>
         </div>
 
-        {/* Toggle Button - Only visible for ALL history */}
-        {periodType === 'ALL' && (
-          <div className="flex bg-slate-50 p-1 rounded-lg">
-             <button
-                onClick={() => setIsSplitYears(true)}
-                className={`p-2 rounded-md transition-all flex items-center gap-2 text-xs font-medium ${isSplitYears ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-                title="Rozdziel lata"
-             >
-                <Layers size={16} /> <span className="hidden sm:inline">Rozdziel</span>
-             </button>
-             <button
-                onClick={() => setIsSplitYears(false)}
-                className={`p-2 rounded-md transition-all flex items-center gap-2 text-xs font-medium ${!isSplitYears ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-                title="Sumuj lata"
-             >
-                <Combine size={16} /> <span className="hidden sm:inline">Sumuj</span>
-             </button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+            <select
+               value={selectedCategoryId}
+               onChange={(e) => setSelectedCategoryId(e.target.value)}
+               className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 min-w-[160px]"
+            >
+               <option value="ALL">Wszystkie kategorie</option>
+               {categories.filter(c => c.type === TransactionType.EXPENSE).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+               ))}
+            </select>
+
+            {/* Toggle Button - Only visible for ALL history */}
+            {periodType === 'ALL' && (
+            <div className="flex bg-slate-50 p-1 rounded-lg">
+                <button
+                    onClick={() => setIsSplitYears(true)}
+                    className={`p-2 rounded-md transition-all flex items-center gap-2 text-xs font-medium ${isSplitYears ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="Rozdziel lata"
+                >
+                    <Layers size={16} /> <span className="hidden sm:inline">Rozdziel</span>
+                </button>
+                <button
+                    onClick={() => setIsSplitYears(false)}
+                    className={`p-2 rounded-md transition-all flex items-center gap-2 text-xs font-medium ${!isSplitYears ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="Sumuj lata"
+                >
+                    <Combine size={16} /> <span className="hidden sm:inline">Sumuj</span>
+                </button>
+            </div>
+            )}
+        </div>
       </div>
       
       <div ref={containerRef} className="w-full">
@@ -295,15 +317,19 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                    />
                ) : (
                    // SPLIT VIEW
-                   yearsToShow.map(y => (
-                      <YearlyHeatmap 
-                         key={y} 
-                         year={y} 
-                         data={dataByYear.get(y) || new Map<string, number>()} 
-                         width={width} 
-                         isPrivateMode={isPrivateMode}
-                      />
-                   ))
+                   yearsToShow.length > 0 ? (
+                       yearsToShow.map(y => (
+                          <YearlyHeatmap 
+                             key={y} 
+                             year={y} 
+                             data={dataByYear.get(y) || new Map<string, number>()} 
+                             width={width} 
+                             isPrivateMode={isPrivateMode}
+                          />
+                       ))
+                   ) : (
+                       <div className="text-center py-8 text-slate-400 text-sm">Brak wydatków dla wybranej kategorii.</div>
+                   )
                )}
             </>
          )}

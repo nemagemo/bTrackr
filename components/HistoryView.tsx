@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, TrendingUp, TrendingDown, Edit2, Trash2, ListChecks, ArrowUp, ArrowDown, ArrowUpDown, Download, Scissors } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Edit2, Trash2, ListChecks, ArrowUp, ArrowDown, ArrowUpDown, Download, Scissors, Hash } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER, getCategoryColor, getCategoryName } from '../constants';
 import { SplitTransactionModal } from './SplitTransactionModal';
@@ -22,6 +22,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategoryId, setFilterCategoryId] = useState<string>('ALL');
   const [filterType, setFilterType] = useState<string>('ALL');
+  const [filterTag, setFilterTag] = useState<string>('ALL');
   
   const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
 
@@ -30,17 +31,26 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
     direction: 'desc'
   });
 
+  const availableTags = useMemo(() => {
+     const tags = new Set<string>();
+     transactions.forEach(t => t.tags?.forEach(tag => tags.add(tag)));
+     return Array.from(tags).sort();
+  }, [transactions]);
+
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       const matchesSearch = 
         t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.amount.toString().includes(searchTerm);
+        t.amount.toString().includes(searchTerm) ||
+        (t.tags && t.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
+      
       const matchesCategory = filterCategoryId === 'ALL' || t.categoryId === filterCategoryId;
       const matchesType = filterType === 'ALL' || t.type === filterType;
+      const matchesTag = filterTag === 'ALL' || (t.tags && t.tags.includes(filterTag));
       
-      return matchesSearch && matchesCategory && matchesType;
+      return matchesSearch && matchesCategory && matchesType && matchesTag;
     });
-  }, [transactions, searchTerm, filterCategoryId, filterType]);
+  }, [transactions, searchTerm, filterCategoryId, filterType, filterTag]);
 
   const sortedTransactions = useMemo(() => {
       const sorted = [...filteredTransactions];
@@ -71,11 +81,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
   };
 
   const handleExport = () => {
-    // Export Category NAMES, not IDs, for readability and portable backup
-    const headers = ['btrackr_id', 'date', 'amount', 'description', 'type', 'category', 'subcategory'];
+    const headers = ['btrackr_id', 'date', 'amount', 'description', 'type', 'category', 'subcategory', 'tags'];
     const rows = transactions.map(t => {
       const cat = categories.find(c => c.id === t.categoryId);
       const sub = cat?.subcategories.find(s => s.id === t.subcategoryId);
+      const tagsStr = t.tags ? t.tags.join(';') : '';
       
       return [
         t.id,
@@ -83,8 +93,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
         t.amount.toString(),
         `"${t.description.replace(/"/g, '""')}"`,
         t.type,
-        `"${cat?.name || 'Inne'}"`, // Export Name
-        `"${sub?.name || ''}"` // Export Sub Name
+        `"${cat?.name || 'Inne'}"`, 
+        `"${sub?.name || ''}"`,
+        `"${tagsStr}"`
       ];
     });
 
@@ -105,81 +116,52 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Search and Filters Bar */}
-      <div className="bg-white p-4 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div className="relative w-full md:w-64">
+      <div className="bg-white p-4 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col xl:flex-row gap-4 justify-between items-center">
+        <div className="relative w-full xl:w-64">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Szukaj w opisie lub kwocie..."
+            placeholder="Szukaj, np. #wakacje"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-900"
           />
         </div>
 
-        <div className="flex flex-wrap gap-2 w-full md:w-auto items-center">
+        <div className="flex flex-wrap gap-2 w-full xl:w-auto items-center">
           <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg">
-             <button
-                onClick={() => setFilterType('ALL')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-             >
-                Wszystkie
-             </button>
-             <button
-                onClick={() => setFilterType(TransactionType.INCOME)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === TransactionType.INCOME ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
-             >
-                Przychody
-             </button>
-             <button
-                onClick={() => setFilterType(TransactionType.EXPENSE)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === TransactionType.EXPENSE ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
-             >
-                Wydatki
-             </button>
+             <button onClick={() => setFilterType('ALL')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Wszystkie</button>
+             <button onClick={() => setFilterType(TransactionType.INCOME)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === TransactionType.INCOME ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}>Przychody</button>
+             <button onClick={() => setFilterType(TransactionType.EXPENSE)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === TransactionType.EXPENSE ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}>Wydatki</button>
           </div>
 
-          <select
-            value={filterCategoryId}
-            onChange={(e) => setFilterCategoryId(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all cursor-pointer text-slate-900"
-          >
+          <select value={filterCategoryId} onChange={(e) => setFilterCategoryId(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all cursor-pointer text-slate-900">
             <option value="ALL">Wszystkie kategorie</option>
-            {categories.map(cat => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))}
+            {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
           </select>
+
+          {availableTags.length > 0 && (
+             <div className="relative group">
+                <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} className="pl-8 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all cursor-pointer text-slate-900 min-w-[120px]">
+                   <option value="ALL">Tagi (Wszystkie)</option>
+                   {availableTags.map(tag => <option key={tag} value={tag}>#{tag}</option>)}
+                </select>
+             </div>
+          )}
 
           {transactions.length > 0 && (
             <>
-              <div className="w-px h-8 bg-slate-200 mx-1 hidden md:block"></div>
-              
+              <div className="w-px h-8 bg-slate-200 mx-1 hidden xl:block"></div>
               {onOpenBulkAction && (
-                <button
-                  onClick={onOpenBulkAction}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100"
-                  title="Grupowa kategoryzacja"
-                >
+                <button onClick={onOpenBulkAction} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100" title="Grupowa kategoryzacja">
                   <ListChecks size={14} />
-                  <span className="hidden lg:inline">Kategoryzacja</span>
                 </button>
               )}
-
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                title="Eksportuj (Kopia Zapasowa)"
-              >
+              <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors" title="Eksportuj">
                 <Download size={14} />
-                <span className="hidden lg:inline">Eksportuj</span>
               </button>
-
-              <button
-                onClick={onClearAll}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
-                title="Wyczyść całą historię"
-              >
+              <button onClick={onClearAll} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100" title="Wyczyść">
                 <Trash2 size={14} />
               </button>
             </>
@@ -187,30 +169,19 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
         </div>
       </div>
 
-      {/* Transaction List / Table */}
       <div className="bg-white rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th 
-                  className="px-6 py-3 font-semibold text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors select-none"
-                  onClick={() => handleSort('date')}
-                >
-                  <div className="flex items-center gap-1">
-                    Data {getSortIcon('date')}
-                  </div>
+                <th className="px-6 py-3 font-semibold text-slate-500 cursor-pointer hover:bg-slate-100 transition-colors select-none" onClick={() => handleSort('date')}>
+                  <div className="flex items-center gap-1">Data {getSortIcon('date')}</div>
                 </th>
                 <th className="px-6 py-3 font-semibold text-slate-500">Opis</th>
                 <th className="px-6 py-3 font-semibold text-slate-500">Typ</th>
                 <th className="px-6 py-3 font-semibold text-slate-500">Kategoria</th>
-                <th 
-                  className="px-6 py-3 font-semibold text-slate-500 text-right cursor-pointer hover:bg-slate-100 transition-colors select-none"
-                  onClick={() => handleSort('amount')}
-                >
-                  <div className="flex items-center justify-end gap-1">
-                    Kwota {getSortIcon('amount')}
-                  </div>
+                <th className="px-6 py-3 font-semibold text-slate-500 text-right cursor-pointer hover:bg-slate-100 transition-colors select-none" onClick={() => handleSort('amount')}>
+                  <div className="flex items-center justify-end gap-1">Kwota {getSortIcon('amount')}</div>
                 </th>
                 <th className="px-2 py-3 font-semibold text-slate-500 text-center w-28">Akcje</th>
               </tr>
@@ -227,11 +198,15 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
                       <td className="px-6 py-4 text-slate-500 whitespace-nowrap">
                         {new Date(t.date).toLocaleDateString('pl-PL')}
                       </td>
-                      <td 
-                        className="px-6 py-4 text-slate-800 font-medium max-w-xs truncate" 
-                        title={t.description} 
-                      >
-                        {t.description}
+                      <td className="px-6 py-4">
+                         <div className="font-medium text-slate-800 max-w-xs truncate" title={t.description}>{t.description}</div>
+                         {t.tags && t.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                               {t.tags.map(tag => (
+                                  <span key={tag} className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold border border-slate-200">#{tag}</span>
+                               ))}
+                            </div>
+                         )}
                       </td>
                       <td className="px-6 py-4">
                          <div className={`inline-flex p-1.5 rounded-full ${t.type === TransactionType.INCOME ? 'bg-green-100 text-green-600' : 'bg-red-50 text-red-500'}`}>
@@ -240,20 +215,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col items-start gap-1">
-                          <span 
-                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-opacity-10 whitespace-nowrap"
-                            style={{ 
-                              backgroundColor: `${color}20`,
-                              color: color
-                            }}
-                          >
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-opacity-10 whitespace-nowrap" style={{ backgroundColor: `${color}20`, color: color }}>
                             {catName}
                           </span>
-                          {subCat && (
-                            <span className="text-[10px] text-slate-400 pl-1">
-                              › {subCat.name}
-                            </span>
-                          )}
+                          {subCat && <span className="text-[10px] text-slate-400 pl-1">› {subCat.name}</span>}
                         </div>
                       </td>
                       <td className={`px-6 py-4 text-right font-semibold whitespace-nowrap ${t.type === TransactionType.INCOME ? 'text-green-600' : 'text-slate-800'} ${isPrivateMode ? 'blur-[5px] select-none' : ''}`}>
@@ -261,40 +226,16 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
                       </td>
                       <td className="px-2 py-4 text-center">
                         <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {onSplit && (
-                             <button
-                               onClick={() => setSplittingTransaction(t)}
-                               className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
-                               title="Podziel transakcję"
-                             >
-                                <Scissors size={16} />
-                             </button>
-                          )}
-                          <button 
-                            onClick={() => onEdit(t)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                            title="Edytuj"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button 
-                            onClick={() => onDelete(t.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Usuń"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {onSplit && <button onClick={() => setSplittingTransaction(t)} className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors" title="Podziel"><Scissors size={16} /></button>}
+                          <button onClick={() => onEdit(t)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edytuj"><Edit2 size={16} /></button>
+                          <button onClick={() => onDelete(t.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Usuń"><Trash2 size={16} /></button>
                         </div>
                       </td>
                     </tr>
                   )
                 })
               ) : (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                    Brak transakcji.
-                  </td>
-                </tr>
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">Brak transakcji.</td></tr>
               )}
             </tbody>
           </table>

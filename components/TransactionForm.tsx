@@ -1,38 +1,39 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Wand2, Upload } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button } from './Button';
 import { suggestCategory } from '../services/geminiService';
+import { TagInput } from './TagInput';
 
 interface TransactionFormProps {
   onAdd: (transaction: Omit<Transaction, 'id'>) => void;
   onImportClick?: () => void;
   categories: CategoryItem[];
+  allTags?: string[]; // Passed from parent for autocomplete
 }
 
-export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImportClick, categories }) => {
+export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImportClick, categories, allTags = [] }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
   const [categoryId, setCategoryId] = useState<string>('');
   const [subcategoryId, setSubcategoryId] = useState<string>('');
+  const [tags, setTags] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
 
   const availableCategories = categories.filter(c => c.type === type);
   const currentCategory = categories.find(c => c.id === categoryId);
 
-  // Set default category when type changes
   useEffect(() => {
     if (availableCategories.length > 0) {
-      // Try to find "Salary" for income or "Other" for expense as defaults
       const defaultName = type === TransactionType.INCOME ? 'Wynagrodzenie' : 'Inne';
       const defaultCat = availableCategories.find(c => c.name === defaultName) || availableCategories[0];
       setCategoryId(defaultCat.id);
       setSubcategoryId('');
     }
-  }, [type, categories]); // Re-run if categories change
+  }, [type, categories]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,12 +46,13 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
       categoryId,
       subcategoryId: subcategoryId || undefined,
       date: new Date(date).toISOString(),
+      tags: tags
     });
 
     setDescription('');
     setAmount('');
     setDate(new Date().toISOString().split('T')[0]);
-    // Reset to default
+    setTags([]);
     const defaultName = type === TransactionType.INCOME ? 'Wynagrodzenie' : 'Inne';
     const defaultCat = availableCategories.find(c => c.name === defaultName) || availableCategories[0];
     setCategoryId(defaultCat?.id || '');
@@ -61,13 +63,12 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
     if (!description) return;
     setIsSuggesting(true);
     const suggestedId = await suggestCategory(description, categories);
-    
     if (suggestedId) {
       const cat = categories.find(c => c.id === suggestedId);
       if (cat) {
         setType(cat.type);
         setCategoryId(cat.id);
-        setSubcategoryId(''); // Reset sub on auto-suggest
+        setSubcategoryId('');
       }
     }
     setIsSuggesting(false);
@@ -192,6 +193,8 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
             </div>
           )}
         </div>
+
+        <TagInput tags={tags} onChange={setTags} existingTags={allTags} />
 
         <Button type="submit" className="w-full mt-2">
           <Plus size={16} /> Dodaj

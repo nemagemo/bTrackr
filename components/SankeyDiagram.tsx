@@ -1,7 +1,8 @@
+
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import * as d3 from 'd3';
 import { sankey as d3Sankey, sankeyLinkHorizontal, sankeyLeft } from 'd3-sankey';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Layers, Grid } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -13,8 +14,9 @@ interface SankeyDiagramProps {
 
 export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, categories, isPrivateMode }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 500 });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 600 });
   const [drillDownCategoryId, setDrillDownCategoryId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'CATEGORY' | 'SUBCATEGORY'>('CATEGORY');
 
   // Measure container
   useEffect(() => {
@@ -59,12 +61,12 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
 
       const sortedSubKeys = Object.keys(subMap).sort((a, b) => subMap[b] - subMap[a]);
 
-      // D3 nodes need unique IDs or indexes. We'll use objects.
       const nodeList = [
-        { name: catName, color: catColor, value: total, isInteractable: false, type: 'ROOT' }, // Source
+        { name: catName, displayName: catName, color: catColor, value: total, isInteractable: false, type: 'ROOT' }, 
         ...sortedSubKeys.map(name => ({ 
           name, 
-          color: '#cbd5e1', // Subcategories in gray
+          displayName: name,
+          color: '#cbd5e1', 
           value: subMap[name],
           isInteractable: false,
           type: 'SUB'
@@ -80,10 +82,10 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
       return { nodes: nodeList, links: linkList, isDrillDown: true };
     }
 
-    // --- MODE 2: OVERVIEW (Income -> Budget -> Expenses) ---
+    // --- MODE 2: OVERVIEW (Income -> Budget -> Expenses/Subcategories) ---
     const incomeMap: Record<string, number> = {};
-    const expenseMap: Record<string, number> = {};
-    const expenseIdMap: Record<string, string> = {}; 
+    const expenseMap: Record<string, number> = {}; // Key is either CatName or "CatName: SubName"
+    const expenseIdMap: Record<string, string> = {}; // Maps Key to Category ID (for coloring)
     let totalIncome = 0;
     
     transactions.forEach(t => {
@@ -94,8 +96,21 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
         incomeMap[catName] = (incomeMap[catName] || 0) + t.amount;
         totalIncome += t.amount;
       } else {
-         expenseMap[catName] = (expenseMap[catName] || 0) + t.amount;
-         if (cat) expenseIdMap[catName] = cat.id;
+         // EXPENSE LOGIC
+         let key = catName;
+         
+         if (viewMode === 'SUBCATEGORY') {
+             let subName = 'Inne';
+             if (t.subcategoryId) {
+                 const sub = cat?.subcategories.find(s => s.id === t.subcategoryId);
+                 if (sub) subName = sub.name;
+             }
+             // Create unique key for subcategory to avoid collisions between categories
+             key = `${catName}: ${subName}`;
+         }
+
+         expenseMap[key] = (expenseMap[key] || 0) + t.amount;
+         if (cat) expenseIdMap[key] = cat.id;
       }
     });
 
@@ -122,46 +137,77 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     });
 
     const totalAllocated = Object.values(expenseMap).reduce((sum, val) => sum + val, 0);
-    const remaining = totalIncome - totalAllocated;
-    const hasRemaining = remaining > 0.01;
+    const balance = totalIncome - totalAllocated;
+    const hasSurplus = balance > 0.01;
+    const hasDeficit = balance < -0.01;
+    const deficitAmount = Math.abs(balance);
 
     // Sorting Logic
     const sortedIncomeKeys = Object.keys(safeIncomeMap).sort((a, b) => safeIncomeMap[b] - safeIncomeMap[a]);
     
-    // Split expenses into Savings vs Regular
     const allExpenseKeys = Object.keys(safeExpenseMap);
     
-    const savingsKeys = allExpenseKeys.filter(key => {
+    // Helper to sort expenses: By Category Name first (to group subcats), then by Value
+    const sortExpenseKeys = (keys: string[]) => {
+        return keys.sort((a, b) => {
+            const catIdA = safeExpenseIdMap[a];
+            const catIdB = safeExpenseIdMap[b];
+            
+            // In Category mode, catId is enough. In Subcategory mode, grouping by catId keeps them together.
+            if (viewMode === 'SUBCATEGORY' && catIdA !== catIdB) {
+                // Find category names to sort alphabetically
+                const catA = categories.find(c => c.id === catIdA);
+                const catB = categories.find(c => c.id === catIdB);
+                return (catA?.name || '').localeCompare(catB?.name || '');
+            }
+            
+            // If same category (or Category Mode), sort by value descending
+            return safeExpenseMap[b] - safeExpenseMap[a];
+        });
+    };
+
+    const savingsKeys = sortExpenseKeys(allExpenseKeys.filter(key => {
         const catId = safeExpenseIdMap[key];
         const cat = categories.find(c => c.id === catId);
         return cat?.isIncludedInSavings;
-    }).sort((a, b) => safeExpenseMap[b] - safeExpenseMap[a]);
+    }));
 
-    const regularExpenseKeys = allExpenseKeys.filter(key => {
+    const regularExpenseKeys = sortExpenseKeys(allExpenseKeys.filter(key => {
         const catId = safeExpenseIdMap[key];
         const cat = categories.find(c => c.id === catId);
         return !cat?.isIncludedInSavings;
-    }).sort((a, b) => safeExpenseMap[b] - safeExpenseMap[a]);
+    }));
 
-    // Construct Node List: Incomes -> Budget -> [Surplus -> Savings -> Regular]
+    // Construct Node List
     const nodeList = [
       // 1. Incomes
-      ...sortedIncomeKeys.map(name => ({ name, color: '#22c55e', isInteractable: false, type: 'INCOME' })), 
+      ...sortedIncomeKeys.map(name => ({ name, displayName: name, color: '#22c55e', isInteractable: false, type: 'INCOME' })), 
       
-      // 2. Budget Center
-      { name: 'Budżet', color: '#0f172a', isInteractable: false, type: 'BUDGET' }, 
+      // 2. Deficit
+      ...(hasDeficit ? [{ name: 'Deficyt (Z oszczędności)', displayName: 'Deficyt (Z oszczędności)', color: '#f87171', isInteractable: false, type: 'DEFICIT' }] : []),
+
+      // 3. Budget Center
+      { name: 'Budżet', displayName: 'Budżet', color: '#0f172a', isInteractable: false, type: 'BUDGET' }, 
       
-      // 3. Targets (Order: Surplus -> Savings -> Regular)
-      ...(hasRemaining ? [{ name: 'Dostępne Środki', color: '#6366f1', isInteractable: false, type: 'SURPLUS' }] : []),
+      // 4. Targets
+      ...(hasSurplus ? [{ name: 'Dostępne Środki', displayName: 'Dostępne Środki', color: '#6366f1', isInteractable: false, type: 'SURPLUS' }] : []),
       
       ...savingsKeys.map(name => {
          const rawName = name.replace(' (Wydatek)', '');
-         const cat = categories.find(c => c.name === rawName);
          const catId = safeExpenseIdMap[name];
+         const cat = categories.find(c => c.id === catId);
+         
+         // In SUBCATEGORY mode, name is "Cat: Sub". We want to display "Sub".
+         let displayName = rawName;
+         if (viewMode === 'SUBCATEGORY' && rawName.includes(': ')) {
+             displayName = rawName.split(': ')[1];
+         }
+
          return { 
              name, 
+             displayName,
              color: cat ? cat.color : '#94a3b8', 
-             isInteractable: true,
+             isInteractable: viewMode === 'CATEGORY', // Only interactable in Category mode
              categoryId: catId,
              type: 'SAVINGS'
          };
@@ -169,12 +215,19 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
 
       ...regularExpenseKeys.map(name => {
          const rawName = name.replace(' (Wydatek)', '');
-         const cat = categories.find(c => c.name === rawName);
          const catId = safeExpenseIdMap[name];
+         const cat = categories.find(c => c.id === catId);
+
+         let displayName = rawName;
+         if (viewMode === 'SUBCATEGORY' && rawName.includes(': ')) {
+             displayName = rawName.split(': ')[1];
+         }
+
          return { 
              name, 
+             displayName,
              color: cat ? cat.color : '#94a3b8', 
-             isInteractable: true,
+             isInteractable: viewMode === 'CATEGORY',
              categoryId: catId,
              type: 'EXPENSE'
          };
@@ -184,21 +237,23 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     const linkList: any[] = [];
     
     // Indices
-    let currentIndex = 0;
-    
-    // Income Nodes indices: 0 to sortedIncomeKeys.length - 1
-    const budgetIndex = sortedIncomeKeys.length;
+    const deficitIndex = hasDeficit ? sortedIncomeKeys.length : -1;
+    const budgetIndex = sortedIncomeKeys.length + (hasDeficit ? 1 : 0);
     
     // Links: Income -> Budget
     sortedIncomeKeys.forEach((name, i) => {
        linkList.push({ source: i, target: budgetIndex, value: safeIncomeMap[name] });
     });
 
+    if (hasDeficit) {
+        linkList.push({ source: deficitIndex, target: budgetIndex, value: deficitAmount });
+    }
+
     let targetStartIndex = budgetIndex + 1;
 
     // Link: Budget -> Surplus
-    if (hasRemaining) {
-        linkList.push({ source: budgetIndex, target: targetStartIndex, value: remaining });
+    if (hasSurplus) {
+        linkList.push({ source: budgetIndex, target: targetStartIndex, value: balance });
         targetStartIndex++;
     }
 
@@ -215,7 +270,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     });
 
     return { nodes: nodeList, links: linkList, isDrillDown: false };
-  }, [transactions, categories, drillDownCategoryId]);
+  }, [transactions, categories, drillDownCategoryId, viewMode]);
 
   const layoutData = useMemo(() => {
     if (dimensions.width === 0 || rawNodes.length === 0) return null;
@@ -229,7 +284,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
       .nodePadding(12)
       .extent([[0, 0], [width, height]])
       .nodeAlign(sankeyLeft)
-      .nodeSort(null); // Respect our manual sort order
+      .nodeSort(null);
 
     const nodes = rawNodes.map(d => ({ ...d }));
     const links = rawLinks.map(d => ({ ...d }));
@@ -238,7 +293,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
 
     // --- MANUAL CENTERING (Only in Overview Mode) ---
     if (!isDrillDown) {
-        // 1. Center 'Budżet'
         const budgetNode = computedNodes.find((n: any) => n.name === 'Budżet');
         if (budgetNode) {
            const nodeH = budgetNode.y1 - budgetNode.y0;
@@ -250,17 +304,16 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
            computedLinks.filter((l: any) => l.target.index === budgetNode.index).forEach((l: any) => l.y1 += dy);
         }
 
-        // 2. Center Income Group
-        const incomeNodes = computedNodes.filter((n: any) => 
+        const leftSideNodes = computedNodes.filter((n: any) => 
            computedLinks.some((l: any) => l.source.index === n.index && l.target.name === 'Budżet')
         );
-        if (incomeNodes.length > 0) {
-           const minY = Math.min(...incomeNodes.map((n: any) => n.y0));
-           const maxY = Math.max(...incomeNodes.map((n: any) => n.y1));
+        if (leftSideNodes.length > 0) {
+           const minY = Math.min(...leftSideNodes.map((n: any) => n.y0));
+           const maxY = Math.max(...leftSideNodes.map((n: any) => n.y1));
            const grpHeight = maxY - minY;
            const targetY = (height - grpHeight) / 2;
            const dy = targetY - minY;
-           incomeNodes.forEach((n: any) => {
+           leftSideNodes.forEach((n: any) => {
               n.y0 += dy; n.y1 += dy;
               computedLinks.filter((l: any) => l.source.index === n.index).forEach((l: any) => l.y0 += dy);
            });
@@ -273,36 +326,18 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     return { nodes: computedNodes, links: computedLinks, width };
   }, [rawNodes, rawLinks, dimensions, isDrillDown]);
 
-  // Helper to determine link color
   const getLinkColor = (link: any) => {
-      // 1. Drill-down: Use source color (Category Color)
-      if (isDrillDown) {
-          return link.source.color || '#cbd5e1';
-      }
-
-      // 2. Links flowing INTO Budget (Incomes) -> Green
+      if (isDrillDown) return link.source.color || '#cbd5e1';
       if (link.target.name === 'Budżet') {
-          return '#22c55e'; // Green-500
+          if (link.source.type === 'DEFICIT') return '#f87171';
+          return '#22c55e';
       }
-
-      // 3. Links flowing OUT of Budget
       if (link.source.name === 'Budżet') {
-          // A. Surplus -> Green
-          if (link.target.name === 'Dostępne Środki') {
-              return '#22c55e'; // Green-500
-          }
-          
-          // B. Savings -> Blue
-          // We can check the node type we added earlier or look up the category again
-          if (link.target.type === 'SAVINGS') {
-              return '#3b82f6'; // Blue-500
-          }
-
-          // C. Regular Expenses -> Red
-          return '#ef4444'; // Red-500
+          if (link.target.name === 'Dostępne Środki') return '#22c55e';
+          if (link.target.type === 'SAVINGS') return '#3b82f6';
+          return '#ef4444';
       }
-
-      return '#e2e8f0'; // Fallback
+      return '#e2e8f0';
   };
 
   return (
@@ -316,7 +351,22 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                 >
                     <ArrowLeft size={14} /> Wróć do pełnego obrazu
                 </button>
-            ) : <div />}
+            ) : (
+                <div className="flex bg-slate-50 p-1 rounded-lg">
+                    <button
+                        onClick={() => setViewMode('CATEGORY')}
+                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === 'CATEGORY' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                        <Layers size={14} /> Główne
+                    </button>
+                    <button
+                        onClick={() => setViewMode('SUBCATEGORY')}
+                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === 'SUBCATEGORY' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                        <Grid size={14} /> Szczegółowe
+                    </button>
+                </div>
+            )}
         </div>
 
         <div ref={containerRef} className="flex-1 w-full relative overflow-hidden">
@@ -341,7 +391,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                               strokeWidth={Math.max(1, link.width)} 
                               className="hover:stroke-opacity-80 transition-all duration-300"
                            >
-                              <title>{`${link.source.name} → ${link.target.name}\n${formatValue(link.value)}`}</title>
+                              <title>{`${link.source.displayName || link.source.name} → ${link.target.displayName || link.target.name}\n${formatValue(link.value)}`}</title>
                            </path>
                         );
                      })}
@@ -370,7 +420,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                                  x={node.x0} y={node.y0} height={height} width={width} 
                                  fill={node.color} rx={4}
                               >
-                                 <title>{`${node.name}: ${formatValue(node.value)}`}</title>
+                                 <title>{`${node.displayName || node.name}: ${formatValue(node.value)}`}</title>
                               </rect>
                               
                               {showLabel && (
@@ -383,7 +433,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                                      fontSize={12} fontWeight={600} fill="#1e293b"
                                      className="pointer-events-none"
                                   >
-                                     {node.name}
+                                     {node.displayName || node.name}
                                   </text>
                                   <text
                                      x={textX}
