@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Wallet, ArrowDownCircle, ArrowUpCircle, LayoutDashboard, LineChart, History, Settings, Eye, EyeOff } from 'lucide-react';
+import { Wallet, ArrowDownCircle, ArrowUpCircle, LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, PiggyBank } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem, SubcategoryItem, BackupData } from './types';
 import { DEFAULT_CATEGORIES, SYSTEM_IDS, CURRENCY_FORMATTER } from './constants';
 import { StatCard } from './components/StatCard';
@@ -194,8 +194,11 @@ const App: React.FC = () => {
    * totalExpense: Suma wydatków KONSUMPCYJNYCH (bez oszczędności).
    * savingsAmount: Kwota wydana na kategorie z flagą `isIncludedInSavings`.
    * 
-   * Balance (Dostępne środki) = Income - Consumption(TotalExpense). 
-   * (Oszczędności są wliczone w Balance jako posiadane środki).
+   * Balance (Dostępne środki - Księgowe) = Income - Consumption(TotalExpense). 
+   * (Oszczędności są wliczone w Balance jako posiadane środki - to jest widoczne w Analizie).
+   * 
+   * Operational Balance (Dostępne środki - Operacyjne "na życie") = Income - TotalExpense - SavingsAmount.
+   * (Używane na Pulpicie).
    */
   const summary = useMemo(() => {
     return transactions.reduce(
@@ -218,8 +221,8 @@ const App: React.FC = () => {
     );
   }, [transactions, categories]);
 
-  // Saldo "Dostępne środki" = Przychody - Wydatki Konsumpcyjne
-  const balance = summary.totalIncome - summary.totalExpense;
+  // Saldo operacyjne (na życie) = Przychody - Wydatki - Oszczędności
+  const operationalBalance = summary.totalIncome - summary.totalExpense - summary.savingsAmount;
 
   // --- EVENT HANDLERS ---
 
@@ -460,10 +463,10 @@ const App: React.FC = () => {
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-fade-in">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard 
                 label="Dostępne środki" 
-                value={CURRENCY_FORMATTER.format(balance)} 
+                value={CURRENCY_FORMATTER.format(operationalBalance)} 
                 icon={<Wallet className="text-slate-900" size={24} />}
                 colorClass="text-slate-900"
                 isPrivateMode={isPrivateMode}
@@ -480,6 +483,13 @@ const App: React.FC = () => {
                 value={CURRENCY_FORMATTER.format(summary.totalExpense)} 
                 icon={<ArrowDownCircle className="text-red-600" size={24} />}
                 colorClass="text-red-600"
+                isPrivateMode={isPrivateMode}
+              />
+              <StatCard 
+                label="Oszczędności/Inwestycje" 
+                value={CURRENCY_FORMATTER.format(summary.savingsAmount)} 
+                icon={<PiggyBank className="text-emerald-600" size={24} />}
+                colorClass="text-emerald-600"
                 isPrivateMode={isPrivateMode}
               />
             </div>

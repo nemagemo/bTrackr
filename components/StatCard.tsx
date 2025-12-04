@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface StatCardProps {
@@ -7,9 +8,10 @@ interface StatCardProps {
   trend?: 'up' | 'down' | 'neutral';
   colorClass?: string;
   isPrivateMode?: boolean;
+  subValue?: React.ReactNode;
 }
 
-export const StatCard: React.FC<StatCardProps> = ({ label, value, icon, colorClass = "text-slate-900", isPrivateMode }) => {
+export const StatCard: React.FC<StatCardProps> = ({ label, value, icon, colorClass = "text-slate-900", isPrivateMode, subValue }) => {
   return (
     <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col items-start justify-between h-32 transition-transform hover:scale-[1.02]">
       <div className="flex w-full justify-between items-start">
@@ -18,8 +20,15 @@ export const StatCard: React.FC<StatCardProps> = ({ label, value, icon, colorCla
           {icon}
         </div>
       </div>
-      <div className={`text-2xl font-bold tracking-tight ${colorClass}`}>
-        {isPrivateMode ? '***' : value}
+      <div className="w-full">
+        <div className={`text-2xl font-bold tracking-tight ${colorClass}`}>
+          {isPrivateMode ? '***' : value}
+        </div>
+        {subValue && (
+          <div className="text-xs font-medium mt-1 truncate">
+             {subValue}
+          </div>
+        )}
       </div>
     </div>
   );

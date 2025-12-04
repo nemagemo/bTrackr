@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Wand2, Upload } from 'lucide-react';
+import { Plus, Wand2, Upload, X } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button } from './Button';
 import { suggestCategory } from '../services/geminiService';
@@ -127,14 +127,25 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Opis</label>
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={type === TransactionType.INCOME ? "np. Wypłata, Dywidenda" : "np. Zakupy w Biedronce"}
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
-              required
-            />
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={type === TransactionType.INCOME ? "np. Wypłata, Dywidenda" : "np. Zakupy w Biedronce"}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
+                required
+              />
+              {description && (
+                <button
+                  type="button"
+                  onClick={() => setDescription('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleAiSuggest}
@@ -160,15 +171,26 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-slate-500 mb-1">Kwota (PLN)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
-              required
-            />
+            <div className="relative">
+              <input
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
+                required
+              />
+              {amount && (
+                <button
+                  type="button"
+                  onClick={() => setAmount('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

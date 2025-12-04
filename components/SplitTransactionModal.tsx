@@ -166,15 +166,24 @@ export const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
                   {/* Inputs */}
                   <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-12 gap-2">
                      {/* Description */}
-                     <div className="md:col-span-4">
+                     <div className="md:col-span-4 relative">
                         <label className="text-[10px] uppercase font-bold text-slate-400 mb-0.5 block md:hidden">Opis</label>
                         <input 
                            type="text" 
                            value={split.description}
                            onChange={(e) => updateSplit(split.localId, 'description', e.target.value)}
-                           className="w-full text-sm border-slate-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500"
+                           className="w-full text-sm border-slate-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 pr-6"
                            placeholder="Opis"
                         />
+                        {split.description && (
+                          <button
+                            onClick={() => updateSplit(split.localId, 'description', '')}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 md:translate-y-0 text-slate-400 hover:text-slate-600 p-0.5"
+                            style={{ top: '50%' }}
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
                      </div>
 
                      {/* Categories */}

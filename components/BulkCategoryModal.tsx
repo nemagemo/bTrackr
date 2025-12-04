@@ -143,9 +143,17 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
               placeholder={`Wpisz frazę lub kwotę dla ${activeType === TransactionType.EXPENSE ? 'wydatków' : 'przychodów'}...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm text-slate-900"
+              className="w-full pl-10 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm text-slate-900"
               autoFocus
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         </div>
 

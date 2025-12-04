@@ -83,8 +83,18 @@ export const TagInput: React.FC<TagInputProps> = ({ tags, onChange, existingTags
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={tags.length === 0 ? "np. wakacje, remont (Enter)" : ""}
-            className="w-full bg-transparent outline-none text-sm text-slate-800 placeholder-slate-400"
+            className="w-full bg-transparent outline-none text-sm text-slate-800 placeholder-slate-400 pr-6"
           />
+          
+          {inputValue && (
+            <button
+              type="button"
+              onClick={() => setInputValue('')}
+              className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+            >
+              <X size={14} />
+            </button>
+          )}
           
           {/* Autocomplete Dropdown */}
           {suggestions.length > 0 && (

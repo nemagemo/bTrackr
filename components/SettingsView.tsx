@@ -59,15 +59,25 @@ const AddSubcategoryInput = ({ onAdd }: { onAdd: (name: string) => void }) => {
 
   return (
     <div className="flex items-center gap-2 animate-fade-in w-full max-w-xs">
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Nazwa..."
-        autoFocus
-        className="flex-1 bg-white border border-indigo-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900"
-      />
+      <div className="relative flex-1">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Nazwa..."
+          autoFocus
+          className="w-full bg-white border border-indigo-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900 pr-6"
+        />
+        {value && (
+          <button
+            onClick={() => setValue('')}
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
       <button 
         onClick={handleSave} 
         disabled={!value.trim()}
@@ -323,13 +333,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         onChange={(e) => setEditColor(e.target.value)}
                         className="w-8 h-8 rounded cursor-pointer border-none"
                       />
-                      <input 
-                        type="text" 
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        autoFocus
-                      />
+                      <div className="relative flex-1">
+                        <input 
+                          type="text" 
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none pr-6"
+                          autoFocus
+                        />
+                        {editName && (
+                          <button
+                            onClick={() => setEditName('')}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
                       <button onClick={handleSaveEdit} className="text-green-600 p-1"><Check size={18}/></button>
                       <button onClick={() => setEditingCatId(null)} className="text-slate-400 p-1"><X size={18}/></button>
                     </div>
@@ -346,14 +366,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   {activeTab === TransactionType.EXPENSE && !editingCatId && (
                     <div className="flex items-center mr-2 relative group/limit">
                         <Target size={14} className={`mr-1 ${cat.budgetLimit && cat.budgetLimit > 0 ? 'text-indigo-500' : 'text-slate-300'}`} />
-                        <input 
-                          type="number"
-                          placeholder="Limit"
-                          value={cat.budgetLimit && cat.budgetLimit > 0 ? cat.budgetLimit : ''}
-                          onChange={(e) => handleUpdateBudgetLimit(cat.id, e.target.value)}
-                          className="w-16 border-b border-slate-200 focus:border-indigo-500 bg-transparent text-xs text-right focus:outline-none text-slate-700 placeholder-slate-300"
-                          onClick={(e) => e.stopPropagation()}
-                        />
+                        <div className="relative w-16">
+                          <input 
+                            type="number"
+                            placeholder="Limit"
+                            value={cat.budgetLimit && cat.budgetLimit > 0 ? cat.budgetLimit : ''}
+                            onChange={(e) => handleUpdateBudgetLimit(cat.id, e.target.value)}
+                            className="w-full border-b border-slate-200 focus:border-indigo-500 bg-transparent text-xs text-right focus:outline-none text-slate-700 placeholder-slate-300 pr-3"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          {(cat.budgetLimit && cat.budgetLimit > 0) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleUpdateBudgetLimit(cat.id, ''); }}
+                              className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                            >
+                              <X size={10} />
+                            </button>
+                          )}
+                        </div>
                     </div>
                   )}
 
@@ -425,14 +455,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onChange={(e) => setNewCatColor(e.target.value)}
                   className="w-8 h-8 rounded cursor-pointer border-none bg-transparent"
                 />
-                <input 
-                  type="text" 
-                  value={newCatName}
-                  onChange={(e) => setNewCatName(e.target.value)}
-                  placeholder="Nazwa kategorii"
-                  className="flex-1 border border-indigo-200 rounded px-2 py-1 text-sm focus:outline-none bg-white text-slate-900"
-                  autoFocus
-                />
+                <div className="relative flex-1">
+                  <input 
+                    type="text" 
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    placeholder="Nazwa kategorii"
+                    className="w-full border border-indigo-200 rounded px-2 py-1 text-sm focus:outline-none bg-white text-slate-900 pr-6"
+                    autoFocus
+                  />
+                  {newCatName && (
+                    <button
+                      onClick={() => setNewCatName('')}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
                 <button onClick={handleAddCategory} className="text-indigo-600 p-1 bg-white rounded shadow-sm hover:bg-indigo-100"><Check size={16}/></button>
                 <button onClick={() => setIsAddingCat(false)} className="text-slate-400 p-1 hover:text-slate-600"><X size={16}/></button>
               </div>
@@ -467,13 +507,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                        {editingTag === tag ? (
                            <div className="flex items-center gap-2 flex-1">
                               <span className="text-slate-400">#</span>
-                              <input 
-                                 type="text" 
-                                 value={tagEditValue} 
-                                 onChange={(e) => setTagEditValue(e.target.value)}
-                                 className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none min-w-0"
-                                 autoFocus
-                              />
+                              <div className="relative flex-1 min-w-0">
+                                <input 
+                                   type="text" 
+                                   value={tagEditValue} 
+                                   onChange={(e) => setTagEditValue(e.target.value)}
+                                   className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none pr-6"
+                                   autoFocus
+                                />
+                                {tagEditValue && (
+                                  <button
+                                    onClick={() => setTagEditValue('')}
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                )}
+                              </div>
                               <button onClick={handleSaveTag} className="text-green-600 p-1 bg-green-50 rounded hover:bg-green-100"><Check size={16}/></button>
                               <button onClick={() => setEditingTag(null)} className="text-slate-400 p-1 hover:bg-slate-100 rounded"><X size={16}/></button>
                            </div>
@@ -503,18 +553,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="bg-white p-1.5 rounded-lg text-pink-500">
                    <Hash size={16} />
                 </div>
-                <input 
-                  type="text" 
-                  value={newTagName}
-                  onChange={(e) => setNewTagName(e.target.value)}
-                  placeholder="Nowy tag (np. wakacje)"
-                  className="flex-1 border border-pink-200 rounded px-2 py-1 text-sm focus:outline-none bg-white text-slate-900"
-                  autoFocus
-                  onKeyDown={(e) => {
-                     if(e.key === 'Enter') handleAddTag();
-                     if(e.key === 'Escape') setIsAddingTag(false);
-                  }}
-                />
+                <div className="relative flex-1">
+                  <input 
+                    type="text" 
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    placeholder="Nowy tag (np. wakacje)"
+                    className="w-full border border-pink-200 rounded px-2 py-1 text-sm focus:outline-none bg-white text-slate-900 pr-6"
+                    autoFocus
+                    onKeyDown={(e) => {
+                       if(e.key === 'Enter') handleAddTag();
+                       if(e.key === 'Escape') setIsAddingTag(false);
+                    }}
+                  />
+                  {newTagName && (
+                    <button
+                      onClick={() => setNewTagName('')}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
                 <button onClick={handleAddTag} className="text-pink-600 p-1 bg-white rounded shadow-sm hover:bg-pink-100"><Check size={16}/></button>
                 <button onClick={() => setIsAddingTag(false)} className="text-slate-400 p-1 hover:text-slate-600"><X size={16}/></button>
               </div>

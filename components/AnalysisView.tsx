@@ -320,16 +320,16 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
          </div>
       </div>
 
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div className="flex justify-between items-start mb-6"><div className="flex flex-col gap-1"><h3 className="font-semibold text-slate-800">Przepływ środków</h3><p className="text-xs font-normal text-slate-400">Kliknij kategorię wydatków, aby zobaczyć szczegóły</p></div></div>
+        <SankeyDiagram transactions={filteredTransactions} categories={categories} isPrivateMode={isPrivateMode} />
+      </div>
+
       <SpendingVelocity transactions={transactions} categories={categories} currentYear={selectedYear} isPrivateMode={isPrivateMode} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <DayOfWeekStats transactions={filteredTransactions} categories={categories} isPrivateMode={isPrivateMode} />
           <TopTags transactions={filteredTransactions} categories={categories} isPrivateMode={isPrivateMode} />
-      </div>
-
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div className="flex justify-between items-start mb-6"><div className="flex flex-col gap-1"><h3 className="font-semibold text-slate-800">Przepływ środków</h3><p className="text-xs font-normal text-slate-400">Kliknij kategorię wydatków, aby zobaczyć szczegóły</p></div></div>
-        <SankeyDiagram transactions={filteredTransactions} categories={categories} isPrivateMode={isPrivateMode} />
       </div>
 
       <div className="grid grid-cols-1 gap-6">
