@@ -13,6 +13,7 @@ import { ImportModal } from './components/ImportModal';
 import { EditTransactionModal } from './components/EditTransactionModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { BulkCategoryModal } from './components/BulkCategoryModal';
+import { BulkTagModal } from './components/BulkTagModal';
 import { BudgetPulse } from './components/BudgetPulse';
 
 type Tab = 'dashboard' | 'analysis' | 'history' | 'settings';
@@ -40,6 +41,12 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Independent tag list (for tags created in settings but not yet used)
+  const [savedTags, setSavedTags] = useState<string[]>(() => {
+    const saved = localStorage.getItem('btrackr_tags');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [isPrivateMode, setIsPrivateMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('btrackr_private_mode');
     return saved ? JSON.parse(saved) : false;
@@ -49,6 +56,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isBulkTagModalOpen, setIsBulkTagModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const [confirmModal, setConfirmModal] = useState<{
@@ -74,15 +82,19 @@ const App: React.FC = () => {
   }, [categories]);
 
   useEffect(() => {
+    localStorage.setItem('btrackr_tags', JSON.stringify(savedTags));
+  }, [savedTags]);
+
+  useEffect(() => {
     localStorage.setItem('btrackr_private_mode', JSON.stringify(isPrivateMode));
   }, [isPrivateMode]);
 
-  // Pobranie wszystkich unikalnych tagów do autouzupełniania w formularzach
+  // Pobranie wszystkich unikalnych tagów (zarówno z transakcji jak i zapisanych ręcznie)
   const allTags = useMemo(() => {
-     const tags = new Set<string>();
+     const tags = new Set<string>(savedTags);
      transactions.forEach(t => t.tags?.forEach(tag => tags.add(tag)));
      return Array.from(tags).sort();
-  }, [transactions]);
+  }, [transactions, savedTags]);
 
   // --- MIGRATION LOGIC ---
   // Uruchamia się raz po załadowaniu aplikacji.
@@ -343,6 +355,56 @@ const App: React.FC = () => {
      setIsBulkModalOpen(false);
   };
 
+  const handleBulkTagUpdate = (ids: string[], tags: string[], mode: 'ADD' | 'REPLACE') => {
+      setTransactions(prev => prev.map(t => {
+          if (ids.includes(t.id)) {
+              let newTags = t.tags || [];
+              if (mode === 'REPLACE') {
+                  newTags = tags;
+              } else {
+                  // Add only unique new tags
+                  const existingSet = new Set(newTags);
+                  tags.forEach(tag => existingSet.add(tag));
+                  newTags = Array.from(existingSet);
+              }
+              return { ...t, tags: newTags };
+          }
+          return t;
+      }));
+      setIsBulkTagModalOpen(false);
+  };
+
+  const handleRenameTag = (oldName: string, newName: string) => {
+     // Rename in transactions
+     setTransactions(prev => prev.map(t => {
+        if (t.tags && t.tags.includes(oldName)) {
+           const newTags = t.tags.map(tag => tag === oldName ? newName : tag);
+           return { ...t, tags: Array.from(new Set(newTags)) };
+        }
+        return t;
+     }));
+     // Rename in savedTags
+     setSavedTags(prev => prev.map(tag => tag === oldName ? newName : tag));
+  };
+
+  const handleDeleteTag = (tagName: string) => {
+     // Delete from transactions
+     setTransactions(prev => prev.map(t => {
+        if (t.tags && t.tags.includes(tagName)) {
+           return { ...t, tags: t.tags.filter(tag => tag !== tagName) };
+        }
+        return t;
+     }));
+     // Delete from savedTags
+     setSavedTags(prev => prev.filter(tag => tag !== tagName));
+  };
+
+  const handleAddTag = (tagName: string) => {
+     if (!savedTags.includes(tagName)) {
+        setSavedTags(prev => [...prev, tagName]);
+     }
+  };
+
   const handleSplitTransaction = (originalId: string, newTransactions: Omit<Transaction, 'id'>[]) => {
      setTransactions(prev => {
         const filtered = prev.filter(t => t.id !== originalId);
@@ -467,6 +529,7 @@ const App: React.FC = () => {
              onDelete={handleDeleteTransaction}
              onClearAll={handleClearHistory}
              onOpenBulkAction={() => setIsBulkModalOpen(true)}
+             onOpenBulkTagAction={() => setIsBulkTagModalOpen(true)}
              onSplit={handleSplitTransaction}
              isPrivateMode={isPrivateMode}
           />
@@ -480,6 +543,10 @@ const App: React.FC = () => {
             onDeleteCategory={handleDeleteCategory}
             onDeleteSubcategory={handleDeleteSubcategory}
             onLoadDemo={handleLoadDemo}
+            onRenameTag={handleRenameTag}
+            onDeleteTag={handleDeleteTag}
+            onAddTag={handleAddTag}
+            allTags={allTags}
           />
         )}
       </main>
@@ -529,6 +596,15 @@ const App: React.FC = () => {
         transactions={transactions}
         categories={categories}
         onUpdate={handleBulkUpdate}
+      />
+
+      <BulkTagModal
+        isOpen={isBulkTagModalOpen}
+        onClose={() => setIsBulkTagModalOpen(false)}
+        transactions={transactions}
+        categories={categories}
+        allTags={allTags}
+        onUpdate={handleBulkTagUpdate}
       />
 
       <ConfirmModal 

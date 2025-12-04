@@ -12,6 +12,7 @@ interface HistoryViewProps {
   onDelete: (id: string) => void;
   onClearAll: () => void;
   onOpenBulkAction?: () => void;
+  onOpenBulkTagAction?: () => void;
   onSplit?: (originalId: string, newTransactions: Omit<Transaction, 'id'>[]) => void;
   isPrivateMode?: boolean;
 }
@@ -22,7 +23,7 @@ type SortDirection = 'asc' | 'desc';
 /**
  * Komponent wyświetlający pełną listę transakcji z filtrami i sortowaniem.
  */
-export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categories, onEdit, onDelete, onClearAll, onOpenBulkAction, onSplit, isPrivateMode }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categories, onEdit, onDelete, onClearAll, onOpenBulkAction, onOpenBulkTagAction, onSplit, isPrivateMode }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategoryId, setFilterCategoryId] = useState<string>('ALL');
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -178,16 +179,21 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
           )}
 
           {transactions.length > 0 && (
-            <>
-              {onOpenBulkAction && (
-                <button onClick={onOpenBulkAction} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200 shadow-sm" title="Grupowa kategoryzacja">
-                  <ListChecks size={16} /> <span>Grupowa Kategoryzacja</span>
+            <div className="flex items-center gap-2">
+              {onOpenBulkTagAction && (
+                <button onClick={onOpenBulkTagAction} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-pink-600 bg-pink-50 hover:bg-pink-100 rounded-lg transition-colors border border-pink-200 shadow-sm" title="Grupowe Tagowanie">
+                  <Hash size={16} /> <span className="hidden sm:inline">Tagi</span>
                 </button>
               )}
-              <button onClick={onClearAll} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200 shadow-sm" title="Wyczyść Historię">
-                <Trash2 size={16} /> <span>Wyczyść Historię</span>
+              {onOpenBulkAction && (
+                <button onClick={onOpenBulkAction} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200 shadow-sm" title="Grupowa kategoryzacja">
+                  <ListChecks size={16} /> <span className="hidden sm:inline">Kategorie</span>
+                </button>
+              )}
+              <button onClick={onClearAll} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200 shadow-sm" title="Wyczyść Historię">
+                <Trash2 size={16} />
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>
