@@ -16,6 +16,7 @@ interface TransactionFormProps {
 export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImportClick, categories, allTags = [] }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  // Data inicjalizowana jako YYYY-MM-DD
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [type, setType] = useState<TransactionType>(TransactionType.EXPENSE);
   const [categoryId, setCategoryId] = useState<string>('');
@@ -40,8 +41,12 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
     e.preventDefault();
     if (!description || !amount || !categoryId || !date) return;
 
-    // Robust date creation
-    const finalDate = new Date(date).toISOString();
+    // FIX TIMEZONE: Ustawiamy godzinę na 12:00:00 (Południe).
+    // Domyślne new Date(date) ustawia 00:00 UTC. W strefie GMT+1 to jest 23:00 poprzedniego dnia.
+    // Ustawienie godziny 12:00 jest bezpieczne dla większości stref czasowych.
+    const dateObj = new Date(date);
+    dateObj.setHours(12, 0, 0, 0);
+    const finalDate = dateObj.toISOString();
 
     onAdd({
       description,

@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { 
   select, 
@@ -154,7 +155,15 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
 };
 
 // --- 5. Multi Line Chart ---
-export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKey?: string }> = ({ data, keys, colors = [], height = 300, isPrivateMode, highlightKey }) => {
+export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKey?: string, highlightStrokeWidth?: number }> = ({ 
+  data, 
+  keys, 
+  colors = [], 
+  height = 300, 
+  isPrivateMode, 
+  highlightKey,
+  highlightStrokeWidth = 4
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { width } = useResizeObserver(containerRef);
 
@@ -200,7 +209,7 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
         .datum(lineData)
         .attr("fill", "none")
         .attr("stroke", color)
-        .attr("stroke-width", isHighlighted ? 4 : 2)
+        .attr("stroke-width", isHighlighted ? highlightStrokeWidth : 2)
         .attr("stroke-opacity", isHighlighted ? 1 : 0.7) // Slightly dim others
         .attr("d", line);
 
@@ -238,7 +247,7 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
     
     g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
 
-  }, [data, width, height, keys, colors, isPrivateMode, highlightKey]);
+  }, [data, width, height, keys, colors, isPrivateMode, highlightKey, highlightStrokeWidth]);
 
   const colorScale = scaleOrdinal().domain(keys).range(colors);
 

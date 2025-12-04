@@ -1,28 +1,36 @@
+
 import React, { useMemo } from 'react';
 import { Hash } from 'lucide-react';
-import { Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 
 interface TopTagsProps {
   transactions: Transaction[];
+  categories: CategoryItem[];
   isPrivateMode?: boolean;
 }
 
-export const TopTags: React.FC<TopTagsProps> = ({ transactions, isPrivateMode }) => {
+export const TopTags: React.FC<TopTagsProps> = ({ transactions, categories, isPrivateMode }) => {
+  const savingsCategoryIds = useMemo(() => {
+      return new Set(categories.filter(c => c.isIncludedInSavings).map(c => c.id));
+  }, [categories]);
+
   const data = useMemo(() => {
     const tagMap = new Map<string, number>();
     
     transactions.forEach(t => {
       if (t.type !== TransactionType.EXPENSE || !t.tags || t.tags.length === 0) return;
       
+      // Skip savings
+      if (savingsCategoryIds.has(t.categoryId)) return;
+
       t.tags.forEach(tag => {
          tagMap.set(tag, (tagMap.get(tag) || 0) + t.amount);
       });
-      // Note: A transaction with 2 tags counts its amount towards both tags, logic is correct for "Cost of Project X".
     });
 
     const totalExpenses = transactions
-        .filter(t => t.type === TransactionType.EXPENSE)
+        .filter(t => t.type === TransactionType.EXPENSE && !savingsCategoryIds.has(t.categoryId))
         .reduce((sum, t) => sum + t.amount, 0);
 
     const sorted = Array.from(tagMap.entries())
@@ -35,7 +43,7 @@ export const TopTags: React.FC<TopTagsProps> = ({ transactions, isPrivateMode })
       .slice(0, 10);
 
     return { sorted, maxVal: sorted[0]?.value || 0 };
-  }, [transactions]);
+  }, [transactions, savingsCategoryIds]);
 
   if (data.sorted.length === 0) return null;
 

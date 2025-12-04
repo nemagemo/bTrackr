@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { select, timeMonday, scaleThreshold, timeDays, timeYear, timeMonths } from 'd3';
 import { Layers, Combine } from 'lucide-react';
@@ -187,6 +188,10 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
   const [isSplitYears, setIsSplitYears] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState('ALL');
 
+  const savingsCategoryIds = useMemo(() => {
+      return new Set(categories.filter(c => c.isIncludedInSavings).map(c => c.id));
+  }, [categories]);
+
   // Measure width
   useEffect(() => {
     const updateWidth = () => {
@@ -200,11 +205,15 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
     return () => observer.disconnect();
   }, []);
 
-  // Filter transactions by selected category
+  // Filter transactions by selected category AND exclude savings
   const filteredTxs = useMemo(() => {
-      if (selectedCategoryId === 'ALL') return transactions;
-      return transactions.filter(t => t.categoryId === selectedCategoryId);
-  }, [transactions, selectedCategoryId]);
+      let txs = transactions;
+      if (selectedCategoryId !== 'ALL') {
+          txs = txs.filter(t => t.categoryId === selectedCategoryId);
+      }
+      // Exclude savings from heatmap
+      return txs.filter(t => !savingsCategoryIds.has(t.categoryId));
+  }, [transactions, selectedCategoryId, savingsCategoryIds]);
 
   // Determine which years to show
   const yearsToShow = useMemo(() => {
@@ -265,7 +274,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
         <div>
           <h3 className="font-semibold text-slate-800">Kalendarz Wydatków</h3>
-          <p className="text-xs text-slate-400">Intensywność wydatków w poszczególnych dniach</p>
+          <p className="text-xs text-slate-400">Intensywność wydatków w poszczególnych dniach (bez oszczędności)</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -275,7 +284,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 min-w-[160px]"
             >
                <option value="ALL">Wszystkie kategorie</option>
-               {categories.filter(c => c.type === TransactionType.EXPENSE).map(c => (
+               {categories.filter(c => c.type === TransactionType.EXPENSE && !c.isIncludedInSavings).map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                ))}
             </select>

@@ -32,8 +32,10 @@ export interface CategoryItem {
   isSystem: boolean; 
   /**
    * Kluczowa flaga dla logiki finansowej.
-   * Jeśli true: Transakcje w tej kategorii są traktowane jako transfer majątku (Oszczędności/Inwestycje),
-   * a nie jako konsumpcja. Wpływa to na obliczanie 'Wydatków' (są wyłączone) i 'Stopy Oszczędności'.
+   * Jeśli true: 
+   * 1. Transakcje NIE są wliczane do ogólnej sumy 'Wydatków' (totalExpense).
+   * 2. Transakcje NIE pomniejszają 'Dostępnych środków' (są traktowane jako transfer majątku).
+   * 3. Służą do obliczania licznika 'Stopy Oszczędności'.
    */
   isIncludedInSavings?: boolean; 
   /**
@@ -54,7 +56,7 @@ export interface Transaction {
   type: TransactionType;
   categoryId: string; // Odnosi się do CategoryItem.id
   subcategoryId?: string; // Odnosi się do SubcategoryItem.id
-  date: string; // Format ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ)
+  date: string; // Format ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ). UWAGA: Zalecane ustawianie godziny na 12:00, aby uniknąć przesunięć stref czasowych.
   tags?: string[]; // Niezależny system tagowania (np. #wakacje, #projektX)
 }
 
@@ -63,8 +65,9 @@ export interface Transaction {
  */
 export interface FinancialSummary {
   totalIncome: number;
-  totalExpense: number; // Tylko wydatki konsumpcyjne (bez oszczędności)
-  balance: number;      // Income - Expense - Transfers
+  totalExpense: number; // Suma wydatków KONSUMPCYJNYCH (bez oszczędności/inwestycji)
+  balance: number;      // Income - TotalExpense (Consumption).
+  savingsAmount: number; // Kwota wydana na kategorie oznaczone jako isIncludedInSavings
 }
 
 export interface ChartDataPoint {
@@ -75,6 +78,7 @@ export interface ChartDataPoint {
 
 /**
  * Struktura pliku eksportu/importu (JSON).
+ * Służy do pełnego backupu stanu aplikacji.
  */
 export interface BackupData {
   version: number;

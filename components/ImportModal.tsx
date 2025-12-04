@@ -158,8 +158,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                  // Spłaszczamy JSON do tabeli, by użyć tej samej logiki mapowania co dla CSV
                  const tableData = flattenJsonToTable(dataArray);
                  if (tableData.length > 0) {
-                     setRawFile(tableData.slice(0, 6)); // Preview only initially? No, full data needed for processing logic below.
-                     // Hack: store full data in rawFile to reuse CSV logic without re-parsing stream.
                      setRawFile(tableData); 
                      
                      if (hasExistingTransactions) {
@@ -188,14 +186,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       complete: (results) => {
         if (results.data && results.data.length > 0) {
           const rows = results.data as string[][];
-          const previewRows = rows.slice(0, 6);
           setRawFile(rows); // Store all rows
           
           if (hasExistingTransactions) {
               setStep('DECISION');
           } else {
               setStep('MAP');
-              guessMappings(previewRows);
+              guessMappings(rows.slice(0, 6));
           }
         } else {
           setError('Plik pusty.');
@@ -301,7 +298,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     if (y < 100) y += 2000;
     if (y < 2000 || y > 2100) return null;
 
-    return new Date(y, m - 1, d).toISOString();
+    // Use noon (12:00) to avoid timezone issues shifting the day backwards
+    return new Date(y, m - 1, d, 12, 0, 0).toISOString();
   };
 
   const detectCategoryNameFromDesc = (desc: string): string | null => {
@@ -318,7 +316,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     const _failedRows: RawTransactionRow[] = [];
     
     const startIndex = hasHeader ? 1 : 0;
-
+    
     for (let i = startIndex; i < rawFile.length; i++) {
       const row = rawFile[i];
       let dateStr = '';
@@ -466,7 +464,16 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   };
 
   const handleUpdateGroupCategory = (sig: string, catName: string) => {
-    setDetectedGroups(prev => prev.map(g => g.signature === sig ? { ...g, currentCategoryName: catName, currentSubcategoryName: 'Inne' } : g));
+    // Find the category to see if we can auto-select 'Inne' or the single subcategory
+    const cat = categories.find(c => c.name === catName);
+    let defaultSub = '';
+    if (cat && cat.subcategories.length === 1) {
+        defaultSub = cat.subcategories[0].name;
+    } else if (cat && cat.subcategories.find(s => s.name === 'Inne')) {
+        defaultSub = 'Inne'; // Auto-select Inne
+    }
+
+    setDetectedGroups(prev => prev.map(g => g.signature === sig ? { ...g, currentCategoryName: catName, currentSubcategoryName: defaultSub } : g));
   };
   
   const handleUpdateGroupSubcategory = (sig: string, subName: string) => {
@@ -488,7 +495,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
          return { 
            ...item, 
            categoryName: group.currentCategoryName,
-           subcategoryName: group.currentSubcategoryName 
+           subcategoryName: group.currentSubcategoryName || 'Inne' // Default to Inne if empty
          };
       }
       return item;
@@ -753,7 +760,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                                         onChange={(e) => handleUpdateGroupSubcategory(group.signature, e.target.value)}
                                         className="flex-1 text-xs border border-slate-200 rounded-lg p-2 bg-slate-50 focus:ring-1 focus:ring-indigo-500"
                                      >
-                                        <option value="Inne">Podkategoria...</option>
+                                        {/* Use empty string for placeholder to ensure proper value matching */}
+                                        <option value="">Podkategoria...</option>
                                         {categories.find(c => c.name === group.currentCategoryName)?.subcategories.map(s => (
                                            <option key={s.id} value={s.name}>{s.name}</option>
                                         ))}
@@ -807,12 +815,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                   </div>
                </div>
               
-              <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
+              <div className="bg-white border rounded-xl overflow-x-auto mb-2">
+                <div className="overflow-x-auto max-h-[400px]">
+                <table className="w-full text-sm relative">
+                  <thead className="sticky top-0 z-10 bg-white">
                     <tr>
                       {rawFile[0]?.map((_, i) => (
-                        <th key={i} className="p-2 min-w-[130px]">
+                        <th key={i} className="p-2 min-w-[130px] bg-white border-b border-slate-200">
                           <select 
                             value={mappings[i] || 'skip'} 
                             onChange={(e) => setMappings(prev => ({ ...prev, [i]: e.target.value as ColumnMapping }))} 
@@ -830,7 +839,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                     {hasHeader && (
                       <tr className="bg-slate-50 border-b border-slate-100">
                         {rawFile[0].map((c, i) => (
-                          <th key={i} className="p-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                          <th key={i} className="p-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50">
                             {c}
                           </th>
                         ))}
@@ -838,7 +847,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                     )}
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {rawFile.slice(hasHeader ? 1 : 0).map((r, i) => (
+                    {rawFile.slice(hasHeader ? 1 : 0, (hasHeader ? 1 : 0) + 5).map((r, i) => (
                       <tr key={i}>
                         {r.map((c, j) => (
                           <td key={j} className="p-3 text-slate-600 border-t border-slate-50 whitespace-nowrap max-w-[200px] truncate" title={c}>
@@ -849,7 +858,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
+              {rawFile.length > 5 && (
+                  <p className="text-xs text-slate-400 text-center">
+                     Pokazuję podgląd pierwszych 5 wierszy z {rawFile.length}.
+                  </p>
+              )}
               
               <div className="flex justify-end pt-4">
                  <Button onClick={handleParseAndAnalyze}>Dalej <ArrowRight size={16}/></Button>

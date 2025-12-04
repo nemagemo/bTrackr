@@ -4,16 +4,16 @@ import { CategoryItem, Transaction, TransactionType } from './types';
 /**
  * SYSTEM_IDS
  * Te identyfikatory są używane w kodzie (`App.tsx`, wykresy) do specjalnego traktowania
- * niektórych kategorii.
+ * niektórych kategorii w logice biznesowej, niezależnie od ich nazwy (która może być edytowana przez usera).
  * 
  * WAŻNE: Nie zmieniaj tych wartości, ponieważ zepsuje to logikę migracji
  * i wykrywania oszczędności w istniejących instancjach aplikacji.
  */
 export const SYSTEM_IDS = {
   SALARY: 'sys_salary',
-  INVESTMENTS: 'sys_investments',      // Traktowane jako oszczędności
-  INTERNAL_TRANSFER: 'sys_transfer',   // Neutralne (często ignorowane w statystykach)
-  SAVINGS: 'sys_savings',              // Traktowane jako oszczędności
+  INVESTMENTS: 'sys_investments',      // Traktowane jako oszczędności (Assets)
+  INTERNAL_TRANSFER: 'sys_transfer',   // Neutralne (często ignorowane w statystykach, transfery techniczne)
+  SAVINGS: 'sys_savings',              // Traktowane jako oszczędności (Assets)
   CREDIT: 'sys_credit', 
   OTHER_EXPENSE: 'sys_other_expense',  // Fallback dla usuniętych kategorii
   OTHER_INCOME: 'sys_other_income',
@@ -23,7 +23,7 @@ const createSub = (name: string) => ({ id: crypto.randomUUID(), name });
 
 /**
  * Domyślny zestaw kategorii ładowany przy pierwszym uruchomieniu aplikacji.
- * Zawiera flagi `isIncludedInSavings` dla odpowiednich kategorii.
+ * Zawiera flagi `isIncludedInSavings` dla odpowiednich kategorii, co jest kluczowe dla poprawnego obliczania salda.
  */
 export const DEFAULT_CATEGORIES: CategoryItem[] = [
   // --- INCOMES ---
@@ -174,7 +174,7 @@ export const DEFAULT_CATEGORIES: CategoryItem[] = [
     type: TransactionType.EXPENSE,
     color: '#10b981',
     isSystem: false,
-    isIncludedInSavings: true, // WAŻNE: Wpływa na Calculation Logic
+    isIncludedInSavings: true, // WAŻNE: Wpływa na Calculation Logic (nie odejmuje od salda)
     subcategories: [
       createSub('Fundusz awaryjny'), createSub('Poduszka finansowa'), createSub('Konto oszczędnościowe'),
       createSub('Cele krótkoterminowe'), createSub('Nadpłata kredytu'), createSub('Lokaty'), createSub('Inne')

@@ -1,17 +1,23 @@
+
 import React, { useMemo, useState } from 'react';
-import { Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CumulativeChart } from './D3Charts';
 
 interface SpendingVelocityProps {
   transactions: Transaction[];
+  categories: CategoryItem[];
   currentYear: number;
   isPrivateMode?: boolean;
 }
 
 type ComparisonMode = 'PREV_MONTH' | 'AVG_3M' | 'AVG_6M' | 'AVG_12M';
 
-export const SpendingVelocity: React.FC<SpendingVelocityProps> = ({ transactions, currentYear, isPrivateMode }) => {
+export const SpendingVelocity: React.FC<SpendingVelocityProps> = ({ transactions, categories, currentYear, isPrivateMode }) => {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>('PREV_MONTH');
+
+  const savingsCategoryIds = useMemo(() => {
+      return new Set(categories.filter(c => c.isIncludedInSavings).map(c => c.id));
+  }, [categories]);
 
   const chartData = useMemo(() => {
     const now = new Date();
@@ -25,8 +31,10 @@ export const SpendingVelocity: React.FC<SpendingVelocityProps> = ({ transactions
 
     // 1. Get Current Series Data
     const getDailyCumulative = (month: number, year: number) => {
+        // Filter: Expenses only AND Not Savings
         const expenses = transactions.filter(t => 
             t.type === TransactionType.EXPENSE &&
+            !savingsCategoryIds.has(t.categoryId) && // Exclude savings
             new Date(t.date).getMonth() === month &&
             new Date(t.date).getFullYear() === year
         );
@@ -113,14 +121,14 @@ export const SpendingVelocity: React.FC<SpendingVelocityProps> = ({ transactions
             dashed: true 
         }
     ];
-  }, [transactions, currentYear, comparisonMode]);
+  }, [transactions, currentYear, comparisonMode, savingsCategoryIds]);
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col w-full">
        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
             <h3 className="font-semibold text-slate-800">Wyścig Wydatków</h3>
-            <p className="text-xs text-slate-400">Tempo wydawania w bieżącym okresie</p>
+            <p className="text-xs text-slate-400">Tempo wydawania w bieżącym okresie (bez oszczędności)</p>
         </div>
         
         <div className="bg-slate-100 p-1 rounded-lg flex overflow-x-auto max-w-full">

@@ -1,10 +1,11 @@
 
 import React, { useMemo } from 'react';
-import { Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType, CategoryItem } from '../types';
 import { MultiLineChart } from './D3Charts';
 
 interface YoYComparisonProps {
   transactions: Transaction[];
+  categories: CategoryItem[];
   isPrivateMode?: boolean;
 }
 
@@ -22,8 +23,12 @@ const HISTORY_COLORS = [
 
 const CURRENT_YEAR_COLOR = '#0f172a'; // Slate-900 (Bold Black/Blue) or Indigo '#4f46e5'
 
-export const YoYComparison: React.FC<YoYComparisonProps> = ({ transactions, isPrivateMode }) => {
+export const YoYComparison: React.FC<YoYComparisonProps> = ({ transactions, categories, isPrivateMode }) => {
   const currentYear = new Date().getFullYear();
+
+  const savingsCategoryIds = useMemo(() => {
+      return new Set(categories.filter(c => c.isIncludedInSavings).map(c => c.id));
+  }, [categories]);
 
   const chartData = useMemo(() => {
     // 1. Identify all years
@@ -38,9 +43,12 @@ export const YoYComparison: React.FC<YoYComparisonProps> = ({ transactions, isPr
         });
     }
 
-    // 3. Aggregate Expenses
+    // 3. Aggregate Expenses (excluding savings)
     transactions.forEach(t => {
        if (t.type !== TransactionType.EXPENSE) return;
+       // Skip savings
+       if (savingsCategoryIds.has(t.categoryId)) return;
+
        const d = new Date(t.date);
        const y = d.getFullYear();
        const m = d.getMonth();
@@ -62,17 +70,20 @@ export const YoYComparison: React.FC<YoYComparisonProps> = ({ transactions, isPr
         colors
     };
 
-  }, [transactions, currentYear]);
+  }, [transactions, currentYear, savingsCategoryIds]);
 
   if (chartData.keys.length === 0) {
       return null;
   }
 
+  // Determine line thickness based on data density
+  const highlightStrokeWidth = chartData.keys.length < 4 ? 2.5 : 4;
+
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-full flex flex-col">
        <div className="mb-6">
         <h3 className="font-semibold text-slate-800">Porównanie Rok do Roku</h3>
-        <p className="text-xs text-slate-400">Historia wydatków we wszystkich latach</p>
+        <p className="text-xs text-slate-400">Historia wydatków konsumpcyjnych (bez oszczędności)</p>
       </div>
       
       <div className="flex-1 min-h-[300px]">
@@ -83,6 +94,7 @@ export const YoYComparison: React.FC<YoYComparisonProps> = ({ transactions, isPr
             height={320}
             isPrivateMode={isPrivateMode}
             highlightKey={currentYear.toString()}
+            highlightStrokeWidth={highlightStrokeWidth}
          />
       </div>
     </div>

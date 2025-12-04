@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Wallet, PieChart as PieChartIcon, ArrowDownCircle, ArrowUpCircle, Sparkles, LayoutDashboard, LineChart, History, Settings, Eye, EyeOff } from 'lucide-react';
+import { Wallet, ArrowDownCircle, ArrowUpCircle, LayoutDashboard, LineChart, History, Settings, Eye, EyeOff } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem, SubcategoryItem, BackupData } from './types';
-import { DEFAULT_CATEGORIES, SYSTEM_IDS, CURRENCY_FORMATTER, getCategoryName } from './constants';
+import { DEFAULT_CATEGORIES, SYSTEM_IDS, CURRENCY_FORMATTER } from './constants';
 import { StatCard } from './components/StatCard';
 import { TransactionForm } from './components/TransactionForm';
 import { TransactionList } from './components/TransactionList';
@@ -13,15 +13,18 @@ import { ImportModal } from './components/ImportModal';
 import { EditTransactionModal } from './components/EditTransactionModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { BulkCategoryModal } from './components/BulkCategoryModal';
-import { getFinancialAdvice } from './services/geminiService';
 import { BudgetPulse } from './components/BudgetPulse';
 
 type Tab = 'dashboard' | 'analysis' | 'history' | 'settings';
 
 /**
- * Główny komponent aplikacji.
- * Odpowiada za zarządzanie stanem globalnym (transakcje, kategorie),
- * routing (zakładki) i komunikację między modalami.
+ * Główny komponent aplikacji (Root).
+ * Odpowiada za:
+ * 1. Zarządzanie stanem globalnym (transakcje, kategorie, ustawienia).
+ * 2. Persystencję danych w LocalStorage.
+ * 3. Routing (zakładki).
+ * 4. Migracje struktur danych między wersjami.
+ * 5. Logikę biznesową obliczania sald (Balance Calculation).
  */
 const App: React.FC = () => {
   // --- GLOBAL STATE ---
@@ -44,8 +47,6 @@ const App: React.FC = () => {
 
   // --- UI STATE ---
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [aiAdvice, setAiAdvice] = useState<string>('');
-  const [isLoadingAdvice, setIsLoadingAdvice] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -76,7 +77,7 @@ const App: React.FC = () => {
     localStorage.setItem('btrackr_private_mode', JSON.stringify(isPrivateMode));
   }, [isPrivateMode]);
 
-  // Pobranie wszystkich unikalnych tagów do autouzupełniania
+  // Pobranie wszystkich unikalnych tagów do autouzupełniania w formularzach
   const allTags = useMemo(() => {
      const tags = new Set<string>();
      transactions.forEach(t => t.tags?.forEach(tag => tags.add(tag)));
@@ -84,19 +85,34 @@ const App: React.FC = () => {
   }, [transactions]);
 
   // --- MIGRATION LOGIC ---
-  // Uruchamia się raz przy zmianie kategorii/transakcji, aby naprawić stare struktury danych.
-  // Główne zadanie: Rozbicie starej kategorii "Zobowiązania i Inne" na nowe, bardziej szczegółowe.
+  // Uruchamia się raz po załadowaniu aplikacji.
   useEffect(() => {
     const performMigration = () => {
-       const oldLiabilityCat = categories.find(c => c.id === 'cat_liabilities');
+       let updatedCategories = [...categories];
+       let updatedTransactions = [...transactions];
+       let hasChanges = false;
 
+       // MIGRACJA 1: Ustawienie flag isIncludedInSavings dla kategorii systemowych
+       updatedCategories = updatedCategories.map(c => {
+          if (c.id === SYSTEM_IDS.SAVINGS || c.id === SYSTEM_IDS.INVESTMENTS) {
+             if (c.isIncludedInSavings !== true) {
+                console.log(`Migrating category ${c.name}: setting isIncludedInSavings=true`);
+                hasChanges = true;
+                return { ...c, isIncludedInSavings: true };
+             }
+          }
+          return c;
+       });
+
+       // MIGRACJA 2: Rozbicie starej kategorii 'cat_liabilities'
+       const oldLiabilityCat = updatedCategories.find(c => c.id === 'cat_liabilities');
        if (oldLiabilityCat) {
           console.log("Migrating 'Zobowiązania i Inne' structure...");
+          hasChanges = true;
 
-          const newCatsToCreate: CategoryItem[] = [];
           const createCatIfMissing = (id: string, name: string, color: string, subNames: string[]) => {
-             if (!categories.some(c => c.id === id)) {
-                newCatsToCreate.push({
+             if (!updatedCategories.some(c => c.id === id)) {
+                updatedCategories.push({
                    id, name, type: TransactionType.EXPENSE, color, isSystem: false, isIncludedInSavings: false,
                    subcategories: subNames.map(s => ({ id: crypto.randomUUID(), name: s }))
                 });
@@ -108,8 +124,6 @@ const App: React.FC = () => {
           createCatIfMissing('cat_loans', 'Zobowiązania', '#7f1d1d', ['Kredyt hipoteczny', 'Kredyt konsumpcyjny', 'Pożyczka', 'Inne']);
           createCatIfMissing(SYSTEM_IDS.OTHER_EXPENSE, 'Inne', '#94a3b8', ['Inne']);
 
-          let updatedCategories = [...categories, ...newCatsToCreate];
-
           const getTargetSubId = (catId: string, subNameToCheck: string) => {
              const cat = updatedCategories.find(c => c.id === catId);
              if (!cat) return '';
@@ -119,7 +133,7 @@ const App: React.FC = () => {
              return inne ? inne.id : (cat.subcategories[0]?.id || '');
           };
 
-          const updatedTransactions = transactions.map(t => {
+          updatedTransactions = updatedTransactions.map(t => {
              if (t.categoryId === 'cat_liabilities') {
                 const oldSub = oldLiabilityCat.subcategories.find(s => s.id === t.subcategoryId);
                 const oldSubName = oldSub ? oldSub.name.toLowerCase() : 'inne';
@@ -129,7 +143,6 @@ const App: React.FC = () => {
 
                 if (oldSubName.includes('ubezpiecz')) {
                    targetCatId = 'cat_insurance';
-                   // ... (logic for insurance subs)
                 } else if (oldSubName.includes('przelew')) {
                    targetCatId = SYSTEM_IDS.INTERNAL_TRANSFER;
                 } else if (oldSubName === 'inne' || oldSubName === 'zobowiązania i inne') {
@@ -148,24 +161,29 @@ const App: React.FC = () => {
           });
 
           updatedCategories = updatedCategories.filter(c => c.id !== 'cat_liabilities');
+       }
 
+       if (hasChanges) {
           setCategories(updatedCategories);
           setTransactions(updatedTransactions);
        }
     };
 
     performMigration();
-  }, [categories, transactions]);
+  }, []); // Run once on mount
 
   /**
-   * Kluczowa logika finansowa.
-   * Oblicza salda na podstawie flagi `isIncludedInSavings`.
+   * KLUCZOWA LOGIKA FINANSOWA (BALANCE CALCULATION).
    * 
-   * totalIncome: Wszystkie przychody.
-   * totalExpense: Wydatki KONSUMPCYJNE (te, które NIE mają isIncludedInSavings).
-   * totalTransfers: Wydatki OSZCZĘDNOŚCIOWE (te, które MAJĄ isIncludedInSavings).
+   * Zaktualizowana logika (User Request v3):
+   * "Transakcje z kategorii które wliczaja sie do stopy oszczędności NIE traktuj jako wydatek."
    * 
-   * Balance (Dostępne środki) = Income - Expense - Transfers.
+   * totalIncome: Suma wpływów.
+   * totalExpense: Suma wydatków KONSUMPCYJNYCH (bez oszczędności).
+   * savingsAmount: Kwota wydana na kategorie z flagą `isIncludedInSavings`.
+   * 
+   * Balance (Dostępne środki) = Income - Consumption(TotalExpense). 
+   * (Oszczędności są wliczone w Balance jako posiadane środki).
    */
   const summary = useMemo(() => {
     return transactions.reduce(
@@ -175,29 +193,24 @@ const App: React.FC = () => {
         if (t.type === TransactionType.INCOME) {
           acc.totalIncome += t.amount;
         } else {
-          const isSavings = cat?.isIncludedInSavings || false;
-
-          if (!isSavings) {
-            acc.totalExpense += t.amount; 
-            acc.totalOutflow += t.amount;
+          // Jeśli kategoria jest oszczędnościowa, NIE dodajemy do totalExpense
+          if (cat?.isIncludedInSavings) {
+            acc.savingsAmount += t.amount;
           } else {
-            acc.totalTransfers += t.amount;
+            acc.totalExpense += t.amount;
           }
         }
         return acc;
       },
-      { totalIncome: 0, totalExpense: 0, totalOutflow: 0, totalTransfers: 0 }
+      { totalIncome: 0, totalExpense: 0, savingsAmount: 0 }
     );
   }, [transactions, categories]);
 
-  const balance = summary.totalIncome - summary.totalOutflow - summary.totalTransfers; 
+  // Saldo "Dostępne środki" = Przychody - Wydatki Konsumpcyjne
+  const balance = summary.totalIncome - summary.totalExpense;
 
   // --- EVENT HANDLERS ---
 
-  /**
-   * Zapewnia istnienie podkategorii (jeśli ID jest puste lub nieprawidłowe, przypisuje 'Inne').
-   * Tworzy podkategorię 'Inne' jeśli nie istnieje w danej kategorii.
-   */
   const ensureSubcategory = (categoryId: string, providedSubId?: string): string => {
     if (providedSubId) return providedSubId;
 
@@ -218,59 +231,54 @@ const App: React.FC = () => {
   };
 
   const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
-    const subId = ensureSubcategory(newTx.categoryId, newTx.subcategoryId);
     const transaction: Transaction = {
       ...newTx,
-      subcategoryId: subId,
       id: crypto.randomUUID(),
+      subcategoryId: ensureSubcategory(newTx.categoryId, newTx.subcategoryId)
     };
-    setTransactions((prev) => [transaction, ...prev]);
+    setTransactions(prev => [transaction, ...prev]);
   };
 
-  const handleUpdateTransaction = (updatedTx: Transaction) => {
-    const subId = ensureSubcategory(updatedTx.categoryId, updatedTx.subcategoryId);
-    const finalTx = { ...updatedTx, subcategoryId: subId };
-    setTransactions((prev) => prev.map(t => t.id === updatedTx.id ? finalTx : t));
+  const handleDeleteTransaction = (id: string) => {
+    setTransactions(prev => prev.filter(t => t.id !== id));
   };
 
-  const handleBulkCategoryUpdate = (ids: string[], newCategoryName: string, newSubcategoryId?: string) => {
-     let targetId = newCategoryName;
-     const match = categories.find(c => c.name === newCategoryName || c.id === newCategoryName);
-     if (match) targetId = match.id;
-
-     const finalSubId = ensureSubcategory(targetId, newSubcategoryId);
-
-     setTransactions(prev => prev.map(t => 
-      ids.includes(t.id) ? { ...t, categoryId: targetId, subcategoryId: finalSubId } : t
-    ));
+  const handleUpdateTransaction = (updated: Transaction) => {
+    setTransactions(prev => prev.map(t => t.id === updated.id ? {
+       ...updated,
+       subcategoryId: ensureSubcategory(updated.categoryId, updated.subcategoryId)
+    } : t));
   };
 
-  /**
-   * Import transakcji (np. z CSV).
-   * Sprawdza duplikaty na podstawie: Data + Kwota + Opis.
-   */
-  const handleImportTransactions = (importedTxs: Transaction[], clearHistory: boolean, categoriesToMerge?: CategoryItem[]) => {
-    if (categoriesToMerge && categoriesToMerge.length > 0) {
-      setCategories(prev => {
-        const prevMap = new Map(prev.map(c => [c.id, c]));
-        categoriesToMerge.forEach(c => prevMap.set(c.id, c));
-        return Array.from(prevMap.values());
-      });
+  const handleClearHistory = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Wyczyść całą historię',
+      message: 'Czy na pewno chcesz usunąć wszystkie transakcje? Tej operacji nie można cofnąć.',
+      action: () => setTransactions([]),
+    });
+  };
+
+  const handleImport = (importedTransactions: Transaction[], clearHistory: boolean, newCategories?: CategoryItem[]) => {
+    if (newCategories) {
+       setCategories(prev => {
+          const combined = [...prev];
+          newCategories.forEach(newCat => {
+             if (!combined.find(c => c.name.toLowerCase() === newCat.name.toLowerCase())) {
+                combined.push(newCat);
+             }
+          });
+          return combined;
+       });
     }
-    
-    if (clearHistory) {
-      setTransactions(importedTxs);
-    } else {
-      setTransactions((prev) => {
-          const existingSignatures = new Set(prev.map(t => 
-             `${t.date}_${t.amount}_${t.description.trim().toLowerCase()}`
-          ));
-          
-          const uniqueNewTxs = importedTxs.filter(t => 
-             !existingSignatures.has(`${t.date}_${t.amount}_${t.description.trim().toLowerCase()}`)
-          );
 
-          return [...uniqueNewTxs, ...prev];
+    if (clearHistory) {
+      setTransactions(importedTransactions);
+    } else {
+      setTransactions(prev => {
+        const existingSignatures = new Set(prev.map(t => `${t.date}-${t.amount}-${t.description}`));
+        const newUnique = importedTransactions.filter(t => !existingSignatures.has(`${t.date}-${t.amount}-${t.description}`));
+        return [...newUnique, ...prev];
       });
     }
   };
@@ -278,252 +286,258 @@ const App: React.FC = () => {
   const handleRestoreBackup = (backup: BackupData) => {
      setCategories(backup.categories);
      setTransactions(backup.transactions);
-     if (backup.settings) {
-        setIsPrivateMode(backup.settings.isPrivateMode);
-     }
+     setIsPrivateMode(backup.settings.isPrivateMode);
+  };
+
+  const handleUpdateCategories = (newCategories: CategoryItem[]) => {
+    setCategories(newCategories);
+  };
+
+  const handleDeleteCategory = (id: string, targetCategoryId?: string, targetSubcategoryId?: string) => {
+    setCategories(prev => prev.filter(c => c.id !== id));
+    
+    const fallbackId = SYSTEM_IDS.OTHER_EXPENSE;
+    const finalTargetId = targetCategoryId || fallbackId;
+
+    setTransactions(prev => prev.map(t => {
+      if (t.categoryId === id) {
+        return { 
+           ...t, 
+           categoryId: finalTargetId,
+           subcategoryId: targetSubcategoryId || undefined
+        };
+      }
+      return t;
+    }));
+  };
+
+  const handleDeleteSubcategory = (catId: string, subId: string) => {
+    setCategories(prev => prev.map(c => {
+       if (c.id !== catId) return c;
+       return { ...c, subcategories: c.subcategories.filter(s => s.id !== subId) };
+    }));
+
+    const cat = categories.find(c => c.id === catId);
+    const inneSub = cat?.subcategories.find(s => s.name === 'Inne');
+    const targetSubId = inneSub ? inneSub.id : undefined;
+
+    setTransactions(prev => prev.map(t => {
+       if (t.categoryId === catId && t.subcategoryId === subId) {
+          return { ...t, subcategoryId: targetSubId };
+       }
+       return t;
+    }));
+  };
+  
+  const handleBulkUpdate = (ids: string[], newCategoryId: string, newSubcategoryId?: string) => {
+     setTransactions(prev => prev.map(t => {
+        if (ids.includes(t.id)) {
+           return {
+              ...t,
+              categoryId: newCategoryId,
+              subcategoryId: ensureSubcategory(newCategoryId, newSubcategoryId)
+           };
+        }
+        return t;
+     }));
+     setIsBulkModalOpen(false);
   };
 
   const handleSplitTransaction = (originalId: string, newTransactions: Omit<Transaction, 'id'>[]) => {
-    const transactionsToAdd: Transaction[] = newTransactions.map(tx => {
-        const subId = ensureSubcategory(tx.categoryId, tx.subcategoryId);
-        return {
-           ...tx,
+     setTransactions(prev => {
+        const filtered = prev.filter(t => t.id !== originalId);
+        const added = newTransactions.map(t => ({
+           ...t,
            id: crypto.randomUUID(),
-           subcategoryId: subId
-        };
-    });
-
-    setTransactions(prev => {
-       const filtered = prev.filter(t => t.id !== originalId);
-       return [...transactionsToAdd, ...filtered];
-    });
-  };
-
-  const performDeleteTransaction = (id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-    if (editingTransaction?.id === id) {
-      setEditingTransaction(null);
-    }
-  };
-
-  const performClearAll = () => {
-    setTransactions([]);
-    localStorage.removeItem('btrackr_transactions');
-    setEditingTransaction(null);
-  };
-
-  const requestDeleteTransaction = (id: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Usuń transakcję',
-      message: 'Czy na pewno chcesz usunąć tę transakcję?',
-      action: () => performDeleteTransaction(id),
-    });
-  };
-
-  const requestClearAllTransactions = () => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Wyczyść historię',
-      message: 'Czy na pewno chcesz usunąć WSZYSTKIE transakcje?',
-      action: () => performClearAll(),
-    });
-  };
-
-  const handleGetAdvice = async () => {
-    setIsLoadingAdvice(true);
-    const advice = await getFinancialAdvice(transactions, categories);
-    setAiAdvice(advice);
-    setIsLoadingAdvice(false);
-  };
-
-  /**
-   * Logika usuwania kategorii/podkategorii.
-   * Zawsze przenosi transakcje do 'Inne' lub innej wskazanej kategorii,
-   * aby uniknąć osieroconych rekordów.
-   */
-  const handleDeleteSubcategory = (categoryId: string, subcategoryId: string) => {
-    const category = categories.find(c => c.id === categoryId);
-    if (!category) return;
-
-    let otherSub = category.subcategories.find(s => s.name.toLowerCase() === 'inne' && s.id !== subcategoryId);
-    let newCategories = [...categories];
-
-    if (!otherSub) {
-      const newSub: SubcategoryItem = { id: crypto.randomUUID(), name: 'Inne' };
-      newCategories = newCategories.map(c => 
-        c.id === categoryId ? { ...c, subcategories: [...c.subcategories, newSub] } : c
-      );
-      otherSub = newSub;
-    }
-
-    setTransactions(prev => prev.map(t => {
-      if (t.categoryId === categoryId && t.subcategoryId === subcategoryId) {
-        return { ...t, subcategoryId: otherSub!.id };
-      }
-      return t;
-    }));
-
-    setCategories(currentCats => {
-      return newCategories.map(c => 
-        c.id === categoryId ? { ...c, subcategories: c.subcategories.filter(s => s.id !== subcategoryId) } : c
-      );
-    });
-  };
-
-  const handleDeleteCategory = (categoryId: string, targetCategoryId?: string, targetSubcategoryId?: string) => {
-    const categoryToDelete = categories.find(c => c.id === categoryId);
-    if (!categoryToDelete) return;
-
-    let targetCatId = targetCategoryId;
-    let targetSubId = targetSubcategoryId;
-    let updatedCategories = [...categories];
-
-    if (!targetCatId) {
-        let targetCat = categories.find(c => 
-          c.type === categoryToDelete.type && 
-          c.id !== categoryId && 
-          c.name.toLowerCase().includes('inne')
-        );
-        
-        if (!targetCat) {
-           targetCat = {
-             id: crypto.randomUUID(),
-             name: 'Inne',
-             type: categoryToDelete.type,
-             color: '#64748b',
-             isSystem: false,
-             subcategories: []
-           };
-           updatedCategories.push(targetCat);
-        }
-        targetCatId = targetCat.id;
-    }
-
-    const finalTargetCat = updatedCategories.find(c => c.id === targetCatId);
-    
-    if (finalTargetCat) {
-        if (!targetSubId) {
-             let targetSub = finalTargetCat.subcategories.find(s => s.name.toLowerCase() === 'inne');
-             if (!targetSub) {
-                targetSub = { id: crypto.randomUUID(), name: 'Inne' };
-                finalTargetCat.subcategories = [...finalTargetCat.subcategories, targetSub];
-             }
-             targetSubId = targetSub.id;
-        } else {
-             if (!finalTargetCat.subcategories.find(s => s.id === targetSubId)) {
-                let targetSub = finalTargetCat.subcategories.find(s => s.name.toLowerCase() === 'inne');
-                 if (!targetSub) {
-                    targetSub = { id: crypto.randomUUID(), name: 'Inne' };
-                    finalTargetCat.subcategories = [...finalTargetCat.subcategories, targetSub];
-                 }
-                 targetSubId = targetSub.id;
-             }
-        }
-    }
-
-    setTransactions(prev => prev.map(t => {
-      if (t.categoryId === categoryId) {
-        return { ...t, categoryId: targetCatId!, subcategoryId: targetSubId };
-      }
-      return t;
-    }));
-
-    setCategories(updatedCategories.filter(c => c.id !== categoryId));
-  };
-
-  const handleLoadDemo = () => {
-     import('./utils/demoData').then(({ generateDemoTransactions }) => {
-        const demoTxs = generateDemoTransactions(categories);
-        setTransactions(demoTxs);
-        localStorage.setItem('btrackr_transactions', JSON.stringify(demoTxs));
+           subcategoryId: ensureSubcategory(t.categoryId, t.subcategoryId)
+        }));
+        return [...added, ...filtered];
      });
   };
 
+  const handleLoadDemo = () => {
+    import('./utils/demoData').then(module => {
+       const demoTxs = module.generateDemoTransactions(categories);
+       setTransactions(demoTxs);
+       setActiveTab('analysis');
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-20">
-      <header className="bg-white border-b border-slate-100 sticky top-0 z-40 backdrop-blur-md bg-white/80">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 md:pb-0">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="bg-slate-900 p-2 rounded-lg text-white">
+            <div className="bg-slate-900 text-white p-2 rounded-xl">
               <Wallet size={20} />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 hidden sm:block">bTrackr</h1>
+            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">bTrackr</h1>
           </div>
-
-          <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto">
-            <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><LayoutDashboard size={16} /> <span className="hidden sm:inline">Pulpit</span></button>
-            <button onClick={() => setActiveTab('analysis')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'analysis' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><LineChart size={16} /> <span className="hidden sm:inline">Analiza</span></button>
-             <button onClick={() => setActiveTab('history')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><History size={16} /> <span className="hidden sm:inline">Historia</span></button>
-            <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'settings' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Settings size={16} /> <span className="hidden sm:inline">Ustawienia</span></button>
-          </div>
-
+          
           <div className="flex items-center gap-2">
-             <button onClick={() => setIsPrivateMode(!isPrivateMode)} className={`p-2 rounded-full transition-colors ${isPrivateMode ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`} title={isPrivateMode ? "Wyłącz tryb prywatny" : "Włącz tryb prywatny"}>{isPrivateMode ? <EyeOff size={18} /> : <Eye size={18} />}</button>
-             <button onClick={handleGetAdvice} disabled={isLoadingAdvice || transactions.length === 0} className="text-xs font-medium bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors flex items-center gap-1.5 disabled:opacity-50"><Sparkles size={14} /> {isLoadingAdvice ? '...' : 'AI'}</button>
+            <button 
+               onClick={() => setIsPrivateMode(!isPrivateMode)}
+               className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+               title={isPrivateMode ? "Pokaż kwoty" : "Ukryj kwoty"}
+            >
+               {isPrivateMode ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+            <div className="h-6 w-px bg-slate-200 mx-1"></div>
+            <nav className="hidden md:flex gap-1">
+              <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'dashboard' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Pulpit</button>
+              <button onClick={() => setActiveTab('analysis')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'analysis' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Analiza</button>
+              <button onClick={() => setActiveTab('history')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'history' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Historia</button>
+              <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'settings' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Ustawienia</button>
+            </nav>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
-        {aiAdvice && (
-          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 rounded-xl shadow-lg flex items-start gap-3 animate-fade-in">
-            <Sparkles size={20} className="mt-1 flex-shrink-0 text-indigo-200" />
-            <p className="text-sm font-medium leading-relaxed">{aiAdvice}</p>
-            <button onClick={() => setAiAdvice('')} className="ml-auto text-indigo-200 hover:text-white">×</button>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard 
+                label="Dostępne środki" 
+                value={CURRENCY_FORMATTER.format(balance)} 
+                icon={<Wallet className="text-slate-900" size={24} />}
+                colorClass="text-slate-900"
+                isPrivateMode={isPrivateMode}
+              />
+              <StatCard 
+                label="Przychody" 
+                value={CURRENCY_FORMATTER.format(summary.totalIncome)} 
+                icon={<ArrowUpCircle className="text-green-600" size={24} />}
+                colorClass="text-green-600"
+                isPrivateMode={isPrivateMode}
+              />
+              <StatCard 
+                label="Wydatki" 
+                value={CURRENCY_FORMATTER.format(summary.totalExpense)} 
+                icon={<ArrowDownCircle className="text-red-600" size={24} />}
+                colorClass="text-red-600"
+                isPrivateMode={isPrivateMode}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Input & List */}
+              <div className="lg:col-span-2 space-y-6">
+                <TransactionForm 
+                  onAdd={handleAddTransaction} 
+                  onImportClick={() => setIsImportModalOpen(true)}
+                  categories={categories}
+                  allTags={allTags}
+                />
+                
+                <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-slate-800">Ostatnie transakcje</h3>
+                    <button onClick={() => setActiveTab('history')} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">Zobacz wszystkie</button>
+                  </div>
+                  <TransactionList 
+                    transactions={transactions.slice(0, 5)} 
+                    categories={categories} 
+                    onDelete={handleDeleteTransaction}
+                    isPrivateMode={isPrivateMode}
+                  />
+                </div>
+              </div>
+
+              {/* Right Column: Mini Stats */}
+              <div className="space-y-6">
+                 {/* Budget Pulse */}
+                 <BudgetPulse transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />
+              </div>
+            </div>
           </div>
         )}
 
-        {activeTab === 'dashboard' && (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <StatCard label="Dostępne środki" value={CURRENCY_FORMATTER.format(balance)} icon={<Wallet size={20} className="text-slate-600" />} colorClass="text-slate-900" isPrivateMode={isPrivateMode}/>
-              <StatCard label="Przychody" value={CURRENCY_FORMATTER.format(summary.totalIncome)} icon={<ArrowUpCircle size={20} className="text-green-600" />} colorClass="text-green-600" isPrivateMode={isPrivateMode}/>
-              <StatCard label="Wydatki" value={CURRENCY_FORMATTER.format(summary.totalExpense)} icon={<ArrowDownCircle size={20} className="text-red-600" />} colorClass="text-red-600" isPrivateMode={isPrivateMode}/>
-            </div>
-            <div className="animate-fade-in"><BudgetPulse transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} /></div>
-            <div className="grid grid-cols-1 gap-8">
-              <div className="space-y-8">
-                <TransactionForm onAdd={handleAddTransaction} onImportClick={() => setIsImportModalOpen(true)} categories={categories} allTags={allTags}/>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">Ostatnie operacje <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{transactions.length}</span></h2>
-                    <button onClick={() => setActiveTab('history')} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">Zobacz wszystkie</button>
-                  </div>
-                  <div className="bg-white rounded-2xl border border-slate-100 p-2">
-                    <div className="space-y-1">
-                        {transactions.slice(0, 5).map(t => {
-                            const cat = categories.find(c => c.id === t.categoryId);
-                            return (
-                              <div key={t.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl transition-colors">
-                                  <div>
-                                    <div className="flex items-center gap-2">
-                                       <p className="font-semibold text-slate-800">{t.description}</p>
-                                       {t.tags && t.tags.length > 0 && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold">#{t.tags[0]}</span>}
-                                    </div>
-                                    <p className="text-xs text-slate-400">{cat?.name || 'Inne'}</p>
-                                  </div>
-                                  <span className={`${t.type === 'INCOME' ? 'text-green-600 font-bold' : 'text-slate-900 font-bold'} ${isPrivateMode ? 'blur-[5px] select-none' : ''}`}>{t.type === 'INCOME' ? '+' : '-'}{CURRENCY_FORMATTER.format(t.amount)}</span>
-                              </div>
-                            )
-                        })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+        {activeTab === 'analysis' && (
+          <AnalysisView transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />
         )}
 
-        {activeTab === 'analysis' && <AnalysisView transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />}
-        {activeTab === 'history' && <HistoryView transactions={transactions} categories={categories} onEdit={setEditingTransaction} onDelete={requestDeleteTransaction} onClearAll={requestClearAllTransactions} onOpenBulkAction={() => setIsBulkModalOpen(true)} onSplit={handleSplitTransaction} isPrivateMode={isPrivateMode} />}
-        {activeTab === 'settings' && <SettingsView categories={categories} transactions={transactions} onUpdateCategories={setCategories} onDeleteCategory={handleDeleteCategory} onDeleteSubcategory={handleDeleteSubcategory} onLoadDemo={handleLoadDemo} />}
+        {activeTab === 'history' && (
+          <HistoryView 
+             transactions={transactions} 
+             categories={categories} 
+             onEdit={setEditingTransaction} 
+             onDelete={handleDeleteTransaction}
+             onClearAll={handleClearHistory}
+             onOpenBulkAction={() => setIsBulkModalOpen(true)}
+             onSplit={handleSplitTransaction}
+             isPrivateMode={isPrivateMode}
+          />
+        )}
+
+        {activeTab === 'settings' && (
+          <SettingsView 
+            categories={categories} 
+            transactions={transactions}
+            onUpdateCategories={handleUpdateCategories}
+            onDeleteCategory={handleDeleteCategory}
+            onDeleteSubcategory={handleDeleteSubcategory}
+            onLoadDemo={handleLoadDemo}
+          />
+        )}
       </main>
 
-      <ImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} onImport={handleImportTransactions} onRestore={handleRestoreBackup} hasExistingTransactions={transactions.length > 0} categories={categories} />
-      <EditTransactionModal isOpen={!!editingTransaction} transaction={editingTransaction} onClose={() => setEditingTransaction(null)} onSave={handleUpdateTransaction} onDelete={requestDeleteTransaction} categories={categories} allTags={allTags} />
-      <BulkCategoryModal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} transactions={transactions} onUpdate={handleBulkCategoryUpdate} categories={categories} />
-      <ConfirmModal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} onConfirm={() => { confirmModal.action(); setConfirmModal(prev => ({ ...prev, isOpen: false })); }} title={confirmModal.title} message={confirmModal.message} />
+      {/* Mobile Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 flex justify-around z-50 pb-safe">
+        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 rounded-lg ${activeTab === 'dashboard' ? 'text-indigo-600' : 'text-slate-400'}`}>
+          <LayoutDashboard size={20} />
+          <span className="text-[10px] font-medium mt-1">Pulpit</span>
+        </button>
+        <button onClick={() => setActiveTab('analysis')} className={`flex flex-col items-center p-2 rounded-lg ${activeTab === 'analysis' ? 'text-indigo-600' : 'text-slate-400'}`}>
+          <LineChart size={20} />
+          <span className="text-[10px] font-medium mt-1">Analiza</span>
+        </button>
+        <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center p-2 rounded-lg ${activeTab === 'history' ? 'text-indigo-600' : 'text-slate-400'}`}>
+          <History size={20} />
+          <span className="text-[10px] font-medium mt-1">Historia</span>
+        </button>
+        <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center p-2 rounded-lg ${activeTab === 'settings' ? 'text-indigo-600' : 'text-slate-400'}`}>
+          <Settings size={20} />
+          <span className="text-[10px] font-medium mt-1">Opcje</span>
+        </button>
+      </div>
+
+      <ImportModal 
+        isOpen={isImportModalOpen} 
+        onClose={() => setIsImportModalOpen(false)} 
+        onImport={handleImport}
+        onRestore={handleRestoreBackup}
+        hasExistingTransactions={transactions.length > 0}
+        categories={categories}
+      />
+
+      <EditTransactionModal 
+        isOpen={!!editingTransaction} 
+        transaction={editingTransaction} 
+        onClose={() => setEditingTransaction(null)} 
+        onSave={handleUpdateTransaction}
+        onDelete={handleDeleteTransaction}
+        categories={categories}
+        allTags={allTags}
+      />
+
+      <BulkCategoryModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        transactions={transactions}
+        categories={categories}
+        onUpdate={handleBulkUpdate}
+      />
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen} 
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} 
+        onConfirm={() => { confirmModal.action(); setConfirmModal(prev => ({ ...prev, isOpen: false })); }} 
+        title={confirmModal.title} 
+        message={confirmModal.message} 
+      />
     </div>
   );
 };

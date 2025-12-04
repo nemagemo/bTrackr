@@ -317,24 +317,41 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
   }, [rawNodes, rawLinks, dimensions, isDrillDown, viewMode]);
 
   const getLinkColor = (link: any) => {
-      if (isDrillDown) return link.source.color || '#cbd5e1';
+      // 1. Drill Down Mode
+      if (isDrillDown) {
+          // If drilling down, we check if the active category is a savings category or not
+          // But 'drillDownCategoryId' state holds the ID.
+          const isSavings = categories.find(c => c.id === drillDownCategoryId)?.isIncludedInSavings;
+          return isSavings ? '#22c55e' : '#ef4444';
+      }
       
-      // Standard Flow: Income -> Budget
-      if (link.target.type === 'BUDGET') {
-          if (link.source.type === 'DEFICIT') return '#f87171'; // Red
-          return '#22c55e'; // Green
-      }
+      // 2. Main View Mode
+      
+      // Deficit -> Budget (Always Red)
+      if (link.source.type === 'DEFICIT') return '#f87171';
 
-      // Budget -> Category
+      // Income -> Budget (Always Green)
+      if (link.target.type === 'BUDGET') return '#22c55e';
+
+      // Budget -> ...
       if (link.source.type === 'BUDGET') {
-          if (link.target.type === 'SURPLUS') return '#6366f1';
-          return link.target.color; // Use Category Color
+          if (link.target.type === 'SURPLUS') return '#6366f1'; // Blue
+          
+          if (link.target.type === 'SAVINGS') {
+              return '#22c55e'; // Green (same as Income)
+          }
+          if (link.target.type === 'EXPENSE') {
+              return '#ef4444'; // Red (Consumptive Expense)
+          }
+          
+          // Fallback if type is missing (shouldn't happen with current logic)
+          return link.target.color; 
       }
 
-      // Category -> Subcategory
-      if (link.source.type === 'EXPENSE' || link.source.type === 'SAVINGS') {
-          return link.source.color; // Inherit Category Color
-      }
+      // Category -> Subcategory (Detailed View)
+      // Check the source type (which is the Category)
+      if (link.source.type === 'SAVINGS') return '#22c55e';
+      if (link.source.type === 'EXPENSE') return '#ef4444';
 
       return '#e2e8f0';
   };

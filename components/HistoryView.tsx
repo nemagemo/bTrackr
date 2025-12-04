@@ -27,6 +27,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
   const [filterCategoryId, setFilterCategoryId] = useState<string>('ALL');
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterTag, setFilterTag] = useState<string>('ALL');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   
   const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
 
@@ -48,8 +50,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
    * 2. Kategoria
    * 3. Typ (Wpływ/Wydatek)
    * 4. Wybrany Tag
-   * 
-   * Używa explicit checks (if ... return), aby uniknąć błędów JS przy wartościach undefined.
+   * 5. Zakres dat (Od - Do)
    */
   const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
@@ -76,10 +77,19 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
 
       // 5. Tag Filter
       const matchesTag = filterTag === 'ALL' || (t.tags && t.tags.includes(filterTag));
+
+      // 6. Date Range Filter
+      let matchesDate = true;
+      if (dateFrom) {
+         matchesDate = matchesDate && new Date(t.date) >= new Date(dateFrom);
+      }
+      if (dateTo) {
+         matchesDate = matchesDate && new Date(t.date) <= new Date(dateTo + 'T23:59:59');
+      }
       
-      return matchesSearch && matchesCategory && matchesType && matchesTag;
+      return matchesSearch && matchesCategory && matchesType && matchesTag && matchesDate;
     });
-  }, [transactions, searchTerm, filterCategoryId, filterType, filterTag]);
+  }, [transactions, searchTerm, filterCategoryId, filterType, filterTag, dateFrom, dateTo]);
 
   const sortedTransactions = useMemo(() => {
       const sorted = [...filteredTransactions];
@@ -113,6 +123,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="bg-white p-4 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col xl:flex-row gap-4 justify-between items-center">
+        {/* Search Input - Left Aligned */}
         <div className="relative w-full xl:w-72">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -124,7 +135,27 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ transactions, categori
           />
         </div>
 
+        {/* Filters and Actions - Right Aligned */}
         <div className="flex flex-wrap gap-2 w-full xl:flex-1 xl:justify-end items-center">
+           {/* Date Range Filters */}
+           <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-100">
+              <input 
+                type="date" 
+                value={dateFrom} 
+                onChange={(e) => setDateFrom(e.target.value)} 
+                className="bg-transparent text-xs text-slate-600 focus:outline-none px-2 py-1 w-28 cursor-pointer"
+                title="Data od"
+              />
+              <span className="text-slate-300">-</span>
+              <input 
+                type="date" 
+                value={dateTo} 
+                onChange={(e) => setDateTo(e.target.value)} 
+                className="bg-transparent text-xs text-slate-600 focus:outline-none px-2 py-1 w-28 cursor-pointer"
+                title="Data do"
+              />
+           </div>
+
           <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg">
              <button onClick={() => setFilterType('ALL')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Wszystkie</button>
              <button onClick={() => setFilterType(TransactionType.INCOME)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filterType === TransactionType.INCOME ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}>Przychody</button>

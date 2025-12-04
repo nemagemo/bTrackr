@@ -86,7 +86,6 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
   const effectiveShowSurplus = showSurplus && !isTagSelected;
   const effectiveShowSavingsRate = showSavingsRate && !isTagSelected;
 
-  // ... (financialHealthData logic remains largely same but uses filteredTransactions) ...
   const financialHealthData = useMemo(() => {
      let buckets: any[] = [];
      let getBucketIndex = (d: Date) => 0;
@@ -154,10 +153,18 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
         const idx = getBucketIndex(date);
         const cat = categories.find(c => c.id === t.categoryId);
         if (buckets[idx]) {
-            if (t.type === TransactionType.INCOME) buckets[idx].income += t.amount;
-            else {
-               if (cat?.isIncludedInSavings) buckets[idx].savings += t.amount;
-               else buckets[idx].expense += t.amount;
+            if (t.type === TransactionType.INCOME) {
+                buckets[idx].income += t.amount;
+            } else {
+               // STRICT SEPARATION:
+               // If isIncludedInSavings -> Add to 'savings' ONLY (used for rate calc)
+               // Else -> Add to 'expense' (used for bars and surplus line)
+               
+               if (cat?.isIncludedInSavings) {
+                  buckets[idx].savings += t.amount;
+               } else {
+                  buckets[idx].expense += t.amount;
+               }
             }
         }
      });
@@ -166,21 +173,32 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
   }, [filteredTransactions, periodType, periodValue, selectedYear, categories, historyAggregation, yearAggregation]);
 
   const stats = useMemo(() => {
-    const totalIncome = filteredTransactions.filter(t => t.type === TransactionType.INCOME).reduce((sum, t) => sum + t.amount, 0);
-    const totalConsumption = filteredTransactions.filter(t => {
-        if (t.type !== TransactionType.EXPENSE) return false;
-        const cat = categories.find(c => c.id === t.categoryId);
-        return !cat?.isIncludedInSavings;
-    }).reduce((sum, t) => sum + t.amount, 0);
+    // Income
+    const totalIncome = filteredTransactions
+        .filter(t => t.type === TransactionType.INCOME)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+    // Expenses (Consumption Only - exclude savings)
+    const totalExpenses = filteredTransactions
+        .filter(t => {
+            if (t.type !== TransactionType.EXPENSE) return false;
+            const cat = categories.find(c => c.id === t.categoryId);
+            return !cat?.isIncludedInSavings; // Only count if NOT savings
+        })
+        .reduce((sum, t) => sum + t.amount, 0);
+
+    // Savings (Subset of Expenses, just for rate calc)
     const activeSavings = filteredTransactions.filter(t => {
         if (t.type !== TransactionType.EXPENSE) return false;
         const cat = categories.find(c => c.id === t.categoryId);
         return !!cat?.isIncludedInSavings;
     }).reduce((sum, t) => sum + t.amount, 0);
 
-    const balance = totalIncome - totalConsumption - activeSavings; 
+    // Balance (Surplus) = Income - Consumption
+    const balance = totalIncome - totalExpenses; 
     const savingsRate = totalIncome > 0 ? (activeSavings / totalIncome) * 100 : 0;
-    return { totalIncome, totalConsumption, balance, savingsRate };
+    
+    return { totalIncome, totalExpenses, balance, savingsRate };
   }, [filteredTransactions, categories]);
 
   const getPeriodLabel = () => {
@@ -248,7 +266,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm"><p className="text-[10px] text-slate-500 font-bold uppercase">Przychody</p><p className={`text-lg font-bold text-green-600 mt-1`}>{isPrivateMode ? '***' : CURRENCY_FORMATTER.format(stats.totalIncome)}</p></div>
-        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm"><p className="text-[10px] text-slate-500 font-bold uppercase">Wydatki</p><p className={`text-lg font-bold text-red-500 mt-1`}>{isPrivateMode ? '***' : CURRENCY_FORMATTER.format(stats.totalConsumption)}</p></div>
+        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm"><p className="text-[10px] text-slate-500 font-bold uppercase">Wydatki</p><p className={`text-lg font-bold text-red-500 mt-1`}>{isPrivateMode ? '***' : CURRENCY_FORMATTER.format(stats.totalExpenses)}</p></div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm"><p className="text-[10px] text-slate-500 font-bold uppercase">Nadwyżka</p><p className={`text-lg font-bold text-indigo-600 mt-1`}>{isPrivateMode ? '***' : CURRENCY_FORMATTER.format(stats.balance)}</p></div>
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm"><p className="text-[10px] text-slate-500 font-bold uppercase">Stopa oszcz.</p><p className="text-lg font-bold text-emerald-600 mt-1">{stats.savingsRate.toFixed(1)}%</p></div>
       </div>
@@ -302,11 +320,11 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
          </div>
       </div>
 
-      <SpendingVelocity transactions={transactions} currentYear={selectedYear} isPrivateMode={isPrivateMode} />
+      <SpendingVelocity transactions={transactions} categories={categories} currentYear={selectedYear} isPrivateMode={isPrivateMode} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <DayOfWeekStats transactions={filteredTransactions} isPrivateMode={isPrivateMode} />
-          <TopTags transactions={filteredTransactions} isPrivateMode={isPrivateMode} />
+          <DayOfWeekStats transactions={filteredTransactions} categories={categories} isPrivateMode={isPrivateMode} />
+          <TopTags transactions={filteredTransactions} categories={categories} isPrivateMode={isPrivateMode} />
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
@@ -316,8 +334,8 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
 
       <div className="grid grid-cols-1 gap-6">
          <CategoryTrendAnalysis transactions={filteredTransactions} categories={categories} filterYear={selectedYear} periodType={periodType} periodValue={periodValue} historyAggregation={historyAggregation} yearAggregation={yearAggregation} onToggleAggregation={setHistoryAggregation} isPrivateMode={isPrivateMode} />
-         {/* Pass FULL transactions here to ignore tag/date filters */}
-         <YoYComparison transactions={transactions} isPrivateMode={isPrivateMode} />
+         {/* Pass FULL transactions here to ignore tag/date filters, but YoYComparison handles expense filtering internally */}
+         <YoYComparison transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />
       </div>
 
       <CalendarHeatmap transactions={filteredTransactions} categories={categories} year={selectedYear} periodType={periodType} isPrivateMode={isPrivateMode} />
