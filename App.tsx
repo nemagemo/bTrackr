@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Wallet, ArrowDownCircle, ArrowUpCircle, LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, PiggyBank } from 'lucide-react';
+import { Wallet, ArrowDownCircle, ArrowUpCircle, LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, PiggyBank, Upload } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem, SubcategoryItem, BackupData } from './types';
 import { DEFAULT_CATEGORIES, SYSTEM_IDS, CURRENCY_FORMATTER } from './constants';
 import { StatCard } from './components/StatCard';
@@ -15,6 +15,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { BulkCategoryModal } from './components/BulkCategoryModal';
 import { BulkTagModal } from './components/BulkTagModal';
 import { BudgetPulse } from './components/BudgetPulse';
+import { Logo } from './components/Logo';
 
 type Tab = 'dashboard' | 'analysis' | 'history' | 'settings';
 
@@ -420,7 +421,7 @@ const App: React.FC = () => {
      });
   };
 
-  const handleLoadDemo = () => {
+  const executeLoadDemo = () => {
     import('./utils/demoData').then(module => {
        const demoTxs = module.generateDemoTransactions(categories);
        setTransactions(demoTxs);
@@ -428,19 +429,44 @@ const App: React.FC = () => {
     });
   };
 
+  const handleLoadDemoRequest = () => {
+    if (transactions.length > 0) {
+      setConfirmModal({
+        isOpen: true,
+        title: 'Załaduj dane demo',
+        message: 'W historii istnieją już transakcje. Czy chcesz je USUNĄĆ i załadować przykładowe dane demo? Tej operacji nie można cofnąć.',
+        action: executeLoadDemo,
+      });
+    } else {
+      executeLoadDemo();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 pb-20 md:pb-0">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-slate-900 text-white p-2 rounded-xl">
-              <Wallet size={20} />
-            </div>
-            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">bTrackr</h1>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between relative">
+          <div className="flex items-center">
+            {/* Logo Component */}
+            <Logo className="h-10 w-auto text-slate-900" />
           </div>
           
-          <div className="flex items-center gap-2">
+          <nav className="hidden md:flex gap-1 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'dashboard' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Pulpit</button>
+            <button onClick={() => setActiveTab('analysis')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'analysis' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Analiza</button>
+            <button onClick={() => setActiveTab('history')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'history' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Historia</button>
+            <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'settings' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Ustawienia</button>
+          </nav>
+
+          <div className="flex items-center gap-1">
+            <button 
+               onClick={() => setIsImportModalOpen(true)}
+               className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+               title="Importuj dane"
+            >
+               <Upload size={20} />
+            </button>
             <button 
                onClick={() => setIsPrivateMode(!isPrivateMode)}
                className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
@@ -448,13 +474,6 @@ const App: React.FC = () => {
             >
                {isPrivateMode ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
-            <div className="h-6 w-px bg-slate-200 mx-1"></div>
-            <nav className="hidden md:flex gap-1">
-              <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'dashboard' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Pulpit</button>
-              <button onClick={() => setActiveTab('analysis')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'analysis' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Analiza</button>
-              <button onClick={() => setActiveTab('history')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'history' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Historia</button>
-              <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'settings' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Ustawienia</button>
-            </nav>
           </div>
         </div>
       </header>
@@ -494,34 +513,31 @@ const App: React.FC = () => {
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column: Input & List */}
-              <div className="lg:col-span-2 space-y-6">
-                <TransactionForm 
-                  onAdd={handleAddTransaction} 
-                  onImportClick={() => setIsImportModalOpen(true)}
-                  categories={categories}
-                  allTags={allTags}
-                />
-                
-                <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-semibold text-slate-800">Ostatnie transakcje</h3>
-                    <button onClick={() => setActiveTab('history')} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">Zobacz wszystkie</button>
-                  </div>
-                  <TransactionList 
-                    transactions={transactions.slice(0, 5)} 
-                    categories={categories} 
-                    onDelete={handleDeleteTransaction}
-                    isPrivateMode={isPrivateMode}
-                  />
-                </div>
-              </div>
+            {/* Main Content Stack */}
+            
+            {/* 1. Limits/Pulse - Full Width */}
+            <BudgetPulse transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />
 
-              {/* Right Column: Mini Stats */}
-              <div className="space-y-6">
-                 {/* Budget Pulse */}
-                 <BudgetPulse transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />
+            {/* 2. New Transaction & Recent Transactions - Side by Side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <TransactionForm 
+                onAdd={handleAddTransaction} 
+                categories={categories}
+                allTags={allTags}
+                onLoadDemo={handleLoadDemoRequest}
+              />
+              
+              <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-semibold text-slate-800">Ostatnie transakcje</h3>
+                  <button onClick={() => setActiveTab('history')} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">Zobacz wszystkie</button>
+                </div>
+                <TransactionList 
+                  transactions={transactions.slice(0, 5)} 
+                  categories={categories} 
+                  onDelete={handleDeleteTransaction}
+                  isPrivateMode={isPrivateMode}
+                />
               </div>
             </div>
           </div>
@@ -552,7 +568,7 @@ const App: React.FC = () => {
             onUpdateCategories={handleUpdateCategories}
             onDeleteCategory={handleDeleteCategory}
             onDeleteSubcategory={handleDeleteSubcategory}
-            onLoadDemo={handleLoadDemo}
+            onOpenImport={() => setIsImportModalOpen(true)}
             onRenameTag={handleRenameTag}
             onDeleteTag={handleDeleteTag}
             onAddTag={handleAddTag}

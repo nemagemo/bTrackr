@@ -51,7 +51,9 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     if (drillDownCategoryId) {
       const activeCategory = categories.find(c => c.id === drillDownCategoryId);
       const catName = activeCategory ? activeCategory.name : 'Wybrana kategoria';
-      const catColor = activeCategory ? activeCategory.color : '#64748b';
+      // Use blue for savings in drill down as well
+      const isSavings = !!activeCategory?.isIncludedInSavings;
+      const catColor = isSavings ? '#3b82f6' : (activeCategory ? activeCategory.color : '#64748b');
 
       const relevantTxs = transactions.filter(t => t.categoryId === drillDownCategoryId);
       const subMap: Record<string, number> = {};
@@ -156,9 +158,9 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
         addNode({ name: `${name} (Inc)`, displayName: name, color: '#22c55e', type: 'INCOME', value: incomeMap[name] });
     });
 
-    // 2. Deficit (if expense > income)
+    // 2. Deficit (if expense > income) - Color: Dark Slate/Black
     if (hasDeficit) {
-        addNode({ name: 'Deficyt', displayName: 'Deficyt', color: '#f87171', type: 'DEFICIT', value: deficitAmount });
+        addNode({ name: 'Deficyt', displayName: 'Deficyt', color: '#334155', type: 'DEFICIT', value: deficitAmount });
     }
 
     // 3. Budget (Central Node)
@@ -177,7 +179,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
 
     // 4. Surplus (if income > expense)
     if (hasSurplus) {
-        const surplusIndex = addNode({ name: 'Nadwyżka', displayName: 'Dostępne Środki', color: '#6366f1', type: 'SURPLUS', value: balance });
+        const surplusIndex = addNode({ name: 'Nadwyżka', displayName: 'Dostępne Środki', color: '#10b981', type: 'SURPLUS', value: balance }); // Changed to #10b981
         links.push({ source: budgetIndex, target: surplusIndex, value: balance });
     }
 
@@ -195,11 +197,12 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
         const catData = expenseTree[catName];
         
         // Add Category Node
+        // FORCE BLUE FOR SAVINGS
         const catNodeName = `CAT:${catName}`; // Unique internal name
         const catIndex = addNode({ 
             name: catNodeName, 
             displayName: catName, 
-            color: catData.color, 
+            color: catData.isSavings ? '#3b82f6' : catData.color, // Blue if savings 
             type: catData.isSavings ? 'SAVINGS' : 'EXPENSE',
             categoryId: catData.catId,
             isInteractable: viewMode === 'CATEGORY', // Only clickable in Main view
@@ -220,7 +223,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                 const subIndex = addNode({ 
                     name: subNodeName, 
                     displayName: subName, 
-                    color: catData.color, // Inherit category color
+                    color: catData.isSavings ? '#3b82f6' : catData.color, // Inherit color
                     type: 'SUB',
                     isInteractable: false,
                     value: subValue
@@ -320,37 +323,35 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
       // 1. Drill Down Mode
       if (isDrillDown) {
           // If drilling down, we check if the active category is a savings category or not
-          // But 'drillDownCategoryId' state holds the ID.
           const isSavings = categories.find(c => c.id === drillDownCategoryId)?.isIncludedInSavings;
-          return isSavings ? '#22c55e' : '#ef4444';
+          return isSavings ? '#3b82f6' : '#ef4444';
       }
       
       // 2. Main View Mode
       
-      // Deficit -> Budget (Always Red)
-      if (link.source.type === 'DEFICIT') return '#f87171';
+      // Deficit -> Budget (Black/Dark Slate)
+      if (link.source.type === 'DEFICIT') return '#334155';
 
       // Income -> Budget (Always Green)
       if (link.target.type === 'BUDGET') return '#22c55e';
 
       // Budget -> ...
       if (link.source.type === 'BUDGET') {
-          if (link.target.type === 'SURPLUS') return '#6366f1'; // Blue
+          if (link.target.type === 'SURPLUS') return '#10b981'; // Match node color (Emerald 500)
           
           if (link.target.type === 'SAVINGS') {
-              return '#22c55e'; // Green (same as Income)
+              return '#3b82f6'; // Blue
           }
           if (link.target.type === 'EXPENSE') {
               return '#ef4444'; // Red (Consumptive Expense)
           }
           
-          // Fallback if type is missing (shouldn't happen with current logic)
+          // Fallback if type is missing
           return link.target.color; 
       }
 
       // Category -> Subcategory (Detailed View)
-      // Check the source type (which is the Category)
-      if (link.source.type === 'SAVINGS') return '#22c55e';
+      if (link.source.type === 'SAVINGS') return '#3b82f6'; // Blue
       if (link.source.type === 'EXPENSE') return '#ef4444';
 
       return '#e2e8f0';

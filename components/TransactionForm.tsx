@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Wand2, Upload, X } from 'lucide-react';
+import { Plus, Wand2, X, Database } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button } from './Button';
 import { suggestCategory } from '../services/geminiService';
@@ -8,12 +8,12 @@ import { TagInput } from './TagInput';
 
 interface TransactionFormProps {
   onAdd: (transaction: Omit<Transaction, 'id'>) => void;
-  onImportClick?: () => void;
   categories: CategoryItem[];
   allTags?: string[]; // Passed from parent for autocomplete
+  onLoadDemo?: () => void;
 }
 
-export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImportClick, categories, allTags = [] }) => {
+export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categories, allTags = [], onLoadDemo }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   // Data inicjalizowana jako YYYY-MM-DD
@@ -86,20 +86,22 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
   };
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 space-y-4">
+    <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 space-y-4 relative">
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-semibold text-slate-800">Nowa Transakcja</h3>
-        <div className="flex gap-2">
-          {onImportClick && (
-            <button
-              type="button"
-              onClick={onImportClick}
-              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-              title="Importuj CSV"
-            >
-              <Upload size={18} />
-            </button>
-          )}
+        {onLoadDemo && (
+           <button 
+             type="button" 
+             onClick={onLoadDemo} 
+             className="text-[10px] flex items-center gap-1 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors"
+             title="Wgraj przykładowe dane"
+           >
+              <Database size={12} /> Wgraj demo
+           </button>
+        )}
+      </div>
+      
+      <div className="flex justify-start mb-4">
           <div className="flex bg-slate-100 p-1 rounded-lg">
             <button
               type="button"
@@ -120,7 +122,6 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, onImpor
               Przychód
             </button>
           </div>
-        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">

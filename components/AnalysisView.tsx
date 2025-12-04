@@ -1,13 +1,13 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { Filter, Calendar, Layers, ChevronDown, BarChart2, TrendingUp, Activity, Grip, LayoutList, LayoutGrid, Hash, Eye, EyeOff } from 'lucide-react';
+import { Filter, Calendar, Layers, ChevronDown, BarChart2, TrendingUp, Activity, Grip, LayoutList, LayoutGrid, Hash, Eye, EyeOff, BarChart, GitMerge } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 import { SankeyDiagram } from './SankeyDiagram';
 import { CategoryTrendAnalysis } from './CategoryTrendAnalysis';
 import { CalendarHeatmap } from './CalendarHeatmap';
 import { YoYComparison } from './YoYComparison';
-import { ComboChart, DifferenceChart } from './D3Charts';
+import { ComboChart, DifferenceChart, WaterfallChart } from './D3Charts';
 import { SpendingVelocity } from './SpendingVelocity';
 import { DayOfWeekStats } from './DayOfWeekStats';
 import { TopTags } from './TopTags';
@@ -21,12 +21,14 @@ interface AnalysisViewProps {
 export type PeriodType = 'ALL' | 'YEAR' | 'QUARTER' | 'MONTH';
 export type AggregationMode = 'YEARLY' | 'QUARTERLY' | 'MONTHLY';
 type FinancialHealthViewMode = 'COMBO' | 'DIFFERENCE';
+type FlowViewMode = 'SANKEY' | 'WATERFALL';
 
 export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, categories, isPrivateMode }) => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [periodType, setPeriodType] = useState<PeriodType>('ALL');
   const [periodValue, setPeriodValue] = useState<number>(0); 
   const [financialViewMode, setFinancialViewMode] = useState<FinancialHealthViewMode>('COMBO');
+  const [flowViewMode, setFlowViewMode] = useState<FlowViewMode>('SANKEY');
   const [selectedTag, setSelectedTag] = useState<string>('ALL');
   
   const [historyAggregation, setHistoryAggregation] = useState<AggregationMode>('MONTHLY');
@@ -171,6 +173,56 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
      buckets.forEach(b => { b.savingsRate = b.income > 0 ? (b.savings / b.income) * 100 : 0; });
      return buckets;
   }, [filteredTransactions, periodType, periodValue, selectedYear, categories, historyAggregation, yearAggregation]);
+
+  const waterfallData = useMemo(() => {
+     let totalIncome = 0;
+     const expenseMap: Record<string, { amount: number, isSavings: boolean }> = {};
+     
+     filteredTransactions.forEach(t => {
+         const cat = categories.find(c => c.id === t.categoryId);
+         if (t.type === TransactionType.INCOME) {
+             totalIncome += t.amount;
+         } else if (t.type === TransactionType.EXPENSE) {
+             const catName = cat ? cat.name : 'Inne';
+             const isSavings = !!cat?.isIncludedInSavings;
+             if (!expenseMap[catName]) expenseMap[catName] = { amount: 0, isSavings };
+             expenseMap[catName].amount += t.amount;
+         }
+     });
+
+     const result = [];
+     result.push({ name: 'Przychody', value: totalIncome, type: 'income' });
+
+     // Sort expenses by amount desc
+     const sortedExpenses = Object.entries(expenseMap)
+        .sort((a, b) => b[1].amount - a[1].amount);
+     
+     // Take top 7 and aggregate rest
+     const topN = 7;
+     let otherAmount = 0;
+     let otherSavingsAmount = 0;
+
+     sortedExpenses.slice(0, topN).forEach(([name, data]) => {
+         result.push({ 
+             name, 
+             value: data.amount, 
+             type: data.isSavings ? 'savings' : 'expense'
+         });
+     });
+
+     sortedExpenses.slice(topN).forEach(([_, data]) => {
+         if (data.isSavings) otherSavingsAmount += data.amount;
+         else otherAmount += data.amount;
+     });
+
+     if (otherSavingsAmount > 0) result.push({ name: 'Inne Oszcz.', value: otherSavingsAmount, type: 'savings' });
+     if (otherAmount > 0) result.push({ name: 'Pozostałe', value: otherAmount, type: 'expense' });
+
+     // Balance is automatically calculated by component logic, but we pass placeholder
+     result.push({ name: 'Saldo', value: 0, type: 'balance' });
+
+     return result;
+  }, [filteredTransactions, categories]);
 
   const stats = useMemo(() => {
     // Income
@@ -321,8 +373,41 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div className="flex justify-between items-start mb-6"><div className="flex flex-col gap-1"><h3 className="font-semibold text-slate-800">Przepływ środków</h3><p className="text-xs font-normal text-slate-400">Kliknij kategorię wydatków, aby zobaczyć szczegóły</p></div></div>
-        <SankeyDiagram transactions={filteredTransactions} categories={categories} isPrivateMode={isPrivateMode} />
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <div className="flex flex-col gap-1">
+               <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                   {flowViewMode === 'SANKEY' ? 'Diagram Przepływu (Sankey)' : 'Bilans Kaskadowy (Waterfall)'}
+               </h3>
+               <p className="text-xs font-normal text-slate-400">
+                   {flowViewMode === 'SANKEY' 
+                       ? 'Wizualizacja podziału przychodów na kategorie' 
+                       : 'Szczegółowa analiza wpływu kategorii na saldo końcowe'}
+               </p>
+            </div>
+            
+            <div className="flex bg-slate-50 p-1 rounded-lg animate-fade-in">
+                <button
+                    onClick={() => setFlowViewMode('SANKEY')}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${flowViewMode === 'SANKEY' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                    <GitMerge size={16} className="rotate-90" /> Sankey
+                </button>
+                <button
+                    onClick={() => setFlowViewMode('WATERFALL')}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${flowViewMode === 'WATERFALL' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                    <BarChart size={16} /> Waterfall
+                </button>
+            </div>
+        </div>
+
+        <div className="min-h-[400px]">
+            {flowViewMode === 'SANKEY' ? (
+                <SankeyDiagram transactions={filteredTransactions} categories={categories} isPrivateMode={isPrivateMode} />
+            ) : (
+                <WaterfallChart data={waterfallData} isPrivateMode={isPrivateMode} height={450} />
+            )}
+        </div>
       </div>
 
       <SpendingVelocity transactions={transactions} categories={categories} currentYear={selectedYear} isPrivateMode={isPrivateMode} />

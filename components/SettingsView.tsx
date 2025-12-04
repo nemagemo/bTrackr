@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson, Database, Hash, Tag } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson, Database, Hash, Tag, Upload } from 'lucide-react';
 import { CategoryItem, SubcategoryItem, TransactionType, Transaction, BackupData } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { TransferModal } from './TransferModal';
@@ -13,7 +13,7 @@ interface SettingsViewProps {
   onUpdateCategories: (categories: CategoryItem[]) => void;
   onDeleteCategory: (id: string, targetCategoryId?: string, targetSubcategoryId?: string) => void;
   onDeleteSubcategory: (catId: string, subId: string) => void;
-  onLoadDemo?: () => void;
+  onOpenImport?: () => void;
   onRenameTag?: (oldName: string, newName: string) => void;
   onDeleteTag?: (tagName: string) => void;
   onAddTag?: (tagName: string) => void;
@@ -101,7 +101,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateCategories, 
   onDeleteCategory, 
   onDeleteSubcategory,
-  onLoadDemo,
+  onOpenImport,
   onRenameTag,
   onDeleteTag,
   onAddTag,
@@ -266,31 +266,48 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   return (
     <div className="space-y-6 animate-fade-in">
       
-      {/* Backup Section */}
-      <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 rounded-2xl shadow-sm text-white flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div>
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <FileJson size={20} className="text-indigo-400" /> Kopia Zapasowa i Demo
-          </h2>
-          <p className="text-sm text-slate-300 mt-1">
-            Zarządzaj danymi aplikacji. Eksportuj historię lub załaduj przykładowe dane.
-          </p>
+      {/* Kopia Zapasowa i Dane Section */}
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5 rounded-2xl shadow-sm text-white">
+        <div className="flex justify-between items-center gap-4 mb-4">
+           <div>
+             <h2 className="text-lg font-bold flex items-center gap-2">
+               <Database size={20} className="text-indigo-400" /> Kopia Zapasowa i Dane
+             </h2>
+             <p className="text-xs text-slate-300 mt-1">
+               Zarządzaj swoimi danymi: importuj historię lub wykonaj backup.
+             </p>
+           </div>
         </div>
-        <div className="flex gap-2">
-           {onLoadDemo && (
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           {onOpenImport && (
               <Button 
-                 onClick={onLoadDemo} 
-                 className="bg-indigo-600 hover:bg-indigo-700 text-white border-none whitespace-nowrap"
+                 onClick={onOpenImport} 
+                 variant="secondary"
+                 className="bg-white/10 !text-white border-white/20 hover:bg-white/20 py-3 px-4 flex-row justify-start items-center gap-4 h-auto group"
               >
-                 <Database size={16} /> Załaduj Demo (2020-2025)
+                 <div className="p-2 bg-indigo-500/20 rounded-lg shrink-0">
+                    <Upload size={20} className="text-indigo-300 group-hover:text-indigo-200" />
+                 </div>
+                 <div className="text-left">
+                    <span className="block font-bold text-sm text-white">Importuj Dane</span>
+                    <span className="block text-[10px] font-normal text-slate-300">CSV z banku lub JSON</span>
+                 </div>
               </Button>
            )}
+           
            <Button 
               onClick={handleExportBackup} 
               variant="secondary"
-              className="bg-white/10 text-white border-white/20 hover:bg-white/20 whitespace-nowrap"
+              className="bg-white/10 !text-white border-white/20 hover:bg-white/20 py-3 px-4 flex-row justify-start items-center gap-4 h-auto group"
            >
-              <Download size={16} /> Backup (JSON)
+              <div className="p-2 bg-emerald-500/20 rounded-lg shrink-0">
+                 <Download size={20} className="text-emerald-300 group-hover:text-emerald-200" />
+              </div>
+              <div className="text-left">
+                 <span className="block font-bold text-sm text-white">Eksportuj Backup</span>
+                 <span className="block text-[10px] font-normal text-slate-300">Pełna kopia (JSON)</span>
+              </div>
            </Button>
         </div>
       </div>
@@ -320,10 +337,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
           </div>
 
-          {/* List */}
-          <div className="space-y-4">
+          {/* List - Grid Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filteredCategories.map(cat => (
-              <div key={cat.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+              <div key={cat.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white h-fit">
                 <div className="p-3 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 transition-colors">
                   {editingCatId === cat.id ? (
                     <div className="flex items-center gap-2 flex-1">
@@ -356,7 +373,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   ) : (
                     <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setExpandedCategory(expandedCategory === cat.id ? null : cat.id)}>
                       <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                      <span className="font-semibold text-slate-800 text-sm">{cat.name}</span>
+                      <span className="font-semibold text-slate-800 text-sm truncate max-w-[120px] sm:max-w-none">{cat.name}</span>
                       <span className="text-xs text-slate-400">({cat.subcategories.length})</span>
                       {expandedCategory === cat.id ? <ChevronDown size={14} className="text-slate-400"/> : <ChevronRight size={14} className="text-slate-400"/>}
                     </div>
@@ -364,9 +381,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                   {/* Edit Budget Limit (Only for Expense) */}
                   {activeTab === TransactionType.EXPENSE && !editingCatId && (
-                    <div className="flex items-center mr-2 relative group/limit">
+                    <div className="flex items-center mr-2 relative group/limit shrink-0">
                         <Target size={14} className={`mr-1 ${cat.budgetLimit && cat.budgetLimit > 0 ? 'text-indigo-500' : 'text-slate-300'}`} />
-                        <div className="relative w-16">
+                        <div className="relative w-14">
                           <input 
                             type="number"
                             placeholder="Limit"
@@ -387,7 +404,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     {!editingCatId && (
                       <button onClick={() => handleStartEdit(cat)} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded">
                         <Edit2 size={14} />

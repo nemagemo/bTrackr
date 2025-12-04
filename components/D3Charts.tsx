@@ -15,7 +15,8 @@ import {
   scalePoint, 
   max, 
   min,
-  NumberValue
+  NumberValue,
+  format
 } from 'd3';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -446,10 +447,11 @@ export const ComboChart: React.FC<ChartProps> = ({
       <svg width="100%" height={height} className="overflow-visible" />
       <div className="tooltip fixed opacity-0 bg-white p-3 border border-slate-200 shadow-xl rounded-lg text-xs pointer-events-none transition-opacity z-50 min-w-[180px]" />
       <div className="flex flex-wrap gap-4 mt-2 justify-center">
-         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-emerald-500"></div><span className="text-[10px] text-slate-500">Przychód</span></div>
-         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-500"></div><span className="text-[10px] text-slate-500">Wydatek</span></div>
-         {showSurplusLine && <div className="flex items-center gap-1.5"><div className="w-3 h-1 rounded bg-sky-500 border-dashed"></div><span className="text-[10px] text-slate-500">Nadwyżka</span></div>}
-         {showSavingsRateLine && <div className="flex items-center gap-1.5"><div className="w-3 h-1 rounded bg-indigo-500"></div><span className="text-[10px] text-slate-500">Stopa oszcz. (%)</span></div>}
+         {showSurplusLine && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#bbf7d0]"></div><span className="text-[10px] text-slate-500">Nadwyżka</span></div>}
+         {showSurplusLine && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#fecaca]"></div><span className="text-[10px] text-slate-500">Deficyt</span></div>}
+         <div className="flex items-center gap-1.5"><div className="w-4 h-0.5 bg-emerald-500"></div><span className="text-[10px] text-slate-500">Przychód</span></div>
+         <div className="flex items-center gap-1.5"><div className="w-4 h-0.5 bg-red-500 border-dashed"></div><span className="text-[10px] text-slate-500">Wydatek</span></div>
+         {showSavingsRateLine && <div className="flex items-center gap-1.5"><div className="w-4 h-0.5 bg-indigo-500"></div><span className="text-[10px] text-slate-500">Stopa oszcz. (%)</span></div>}
       </div>
     </div>
   );
@@ -753,6 +755,165 @@ export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPri
       .on("mouseleave", () => tooltip.style("opacity", 0));
 
     g.append("g").attr("transform", `translate(0,${chartHeight})`).call(axisBottom(x).tickSize(0)).select(".domain").remove();
+    g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
+
+  }, [data, width, height, isPrivateMode]);
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <svg width="100%" height={height} className="overflow-visible" />
+      <div className="tooltip fixed opacity-0 bg-white p-2 border border-slate-200 shadow-lg rounded text-xs pointer-events-none transition-opacity z-50" />
+    </div>
+  );
+};
+
+// --- 10. Waterfall Chart ---
+export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPrivateMode }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { width } = useResizeObserver(containerRef);
+
+  useEffect(() => {
+    if (!width || !data || !data.length) return;
+    const svg = select(containerRef.current).select('svg');
+    svg.selectAll("*").remove();
+
+    const margin = { top: 30, right: 30, bottom: 70, left: 60 }; // Increased top for labels, bottom for rotated text
+    const chartWidth = width - margin.left - margin.right;
+    const chartHeight = height - margin.top - margin.bottom;
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Prepare data for waterfall
+    let cumulative = 0;
+    const processedData = data.map((d, i) => {
+        const start = cumulative;
+        let end = cumulative;
+        let val = d.value;
+
+        if (d.type === 'income') {
+            end += val;
+        } else if (d.type === 'expense' || d.type === 'savings') {
+            end -= val;
+            val = -val; // Visual negative
+        } else if (d.type === 'balance') {
+            // Balance is the final result, starts from 0 to current cumulative
+            end = cumulative;
+            return { ...d, start: 0, end: cumulative, value: cumulative, isTotal: true };
+        }
+        
+        cumulative = end;
+        return { ...d, start, end, value: Math.abs(d.value), rawValue: d.value, isTotal: false };
+    });
+
+    const x = scaleBand()
+      .domain(processedData.map(d => d.name))
+      .range([0, chartWidth])
+      .padding(0.3);
+
+    // Y Domain needs to cover 0 to Max Income
+    const maxVal = max(processedData, d => Math.max(d.start, d.end)) || 0;
+    const minVal = min(processedData, d => Math.min(d.start, d.end)) || 0;
+    
+    // Ensure we always show 0
+    const y = scaleLinear()
+      .domain([Math.min(0, minVal), Math.max(0, maxVal)])
+      .nice()
+      .range([chartHeight, 0]);
+
+    g.append("g").attr("class", "grid").call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
+
+    const tooltip = select(containerRef.current).select(".tooltip");
+
+    // Bars
+    g.selectAll(".bar")
+      .data(processedData)
+      .enter().append("rect")
+      .attr("x", d => x(d.name) || 0)
+      .attr("y", d => y(Math.max(d.start, d.end)))
+      .attr("width", x.bandwidth())
+      .attr("height", d => Math.max(1, Math.abs(y(d.start) - y(d.end))))
+      .attr("fill", d => {
+          if (d.type === 'income') return '#22c55e'; // Green
+          if (d.type === 'savings') return '#3b82f6'; // Blue (Sankey Match)
+          if (d.type === 'balance') return d.value >= 0 ? '#10b981' : '#334155'; // Changed to Green (Emerald-500) for Surplus
+          return '#ef4444'; // Red for expense
+      })
+      .attr("fill-opacity", 0.6) // Match Sankey Link Opacity
+      .attr("rx", 3)
+      .on("mouseenter", (event, d) => {
+         tooltip.style("opacity", 1)
+                .html(`
+                    <div><strong>${d.name}</strong></div>
+                    <div style="font-weight:bold; color:${d.type==='expense'?'#ef4444':d.type==='income'?'#22c55e':d.type==='savings'?'#3b82f6':d.value>=0?'#10b981':'#334155'}">
+                        ${d.type === 'expense' || d.type === 'savings' ? '-' : ''}${formatValue(d.value, isPrivateMode)}
+                    </div>
+                `)
+                .style("left", `${event.clientX + 10}px`)
+                .style("top", `${event.clientY + 10}px`);
+      })
+      .on("mousemove", (event) => tooltip.style("left", `${event.clientX + 10}px`).style("top", `${event.clientY + 10}px`))
+      .on("mouseleave", () => tooltip.style("opacity", 0));
+
+    // Value Labels
+    g.selectAll(".label")
+       .data(processedData)
+       .enter().append("text")
+       .text(d => formatValue(d.value, isPrivateMode))
+       .attr("x", d => (x(d.name) || 0) + x.bandwidth() / 2)
+       .attr("y", d => {
+           const barTop = y(Math.max(d.start, d.end)); // This is visually the top edge of the rect
+           const barBottom = y(Math.min(d.start, d.end)); // This is visually the bottom edge
+           const height = Math.abs(barTop - barBottom);
+           
+           // If bar is tall enough, center text inside. 
+           // Otherwise put OUTSIDE ABOVE the bar (barTop - 5) for both Income and Expense
+           // to ensure it doesn't overlap the bar below or the connector.
+           if (height > 20) return (barTop + barBottom) / 2;
+           return barTop - 5; 
+       })
+       .attr("dy", "0.35em")
+       .attr("text-anchor", "middle")
+       .attr("font-size", "10px")
+       .attr("font-weight", "bold")
+       .attr("fill", "#1e293b") 
+       .style("pointer-events", "none");
+
+    // Connector Lines
+    const lineData: any[] = [];
+    for(let i=0; i<processedData.length-1; i++) {
+        const curr = processedData[i];
+        const next = processedData[i+1];
+        const yPos = y(curr.end);
+        
+        lineData.push({
+            x1: (x(curr.name) || 0) + x.bandwidth(),
+            x2: (x(next.name) || 0),
+            y: yPos
+        });
+    }
+
+    g.selectAll(".connector")
+        .data(lineData)
+        .enter().append("line")
+        .attr("x1", d => d.x1)
+        .attr("x2", d => d.x2)
+        .attr("y1", d => d.y)
+        .attr("y2", d => d.y)
+        .attr("stroke", "#94a3b8")
+        .attr("stroke-width", 1)
+        .attr("stroke-dasharray", "2,2");
+
+    // X Axis
+    g.append("g").attr("transform", `translate(0,${chartHeight})`)
+        .call(axisBottom(x).tickSize(0))
+        .select(".domain").remove();
+        
+    // Rotate labels to show full names
+    g.selectAll(".tick text")
+        .attr("transform", "rotate(-25)")
+        .attr("text-anchor", "end")
+        .attr("dx", "-0.5em")
+        .attr("dy", "0.5em");
+
     g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
 
   }, [data, width, height, isPrivateMode]);
