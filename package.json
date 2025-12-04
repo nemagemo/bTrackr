@@ -17,7 +17,6 @@
     "papaparse": "^5.4.1",
     "d3": "^7.9.0",
     "d3-sankey": "^0.12.3",
-    "@nivo/sankey": "^0.87.0",
     "clsx": "^2.1.0",
     "tailwind-merge": "^2.2.1"
   },
