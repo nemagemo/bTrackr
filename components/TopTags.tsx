@@ -45,8 +45,6 @@ export const TopTags: React.FC<TopTagsProps> = ({ transactions, categories, isPr
     return { sorted, maxVal: sorted[0]?.value || 0 };
   }, [transactions, savingsCategoryIds]);
 
-  if (data.sorted.length === 0) return null;
-
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-full flex flex-col">
       <div className="mb-6 flex justify-between items-start">
@@ -60,31 +58,43 @@ export const TopTags: React.FC<TopTagsProps> = ({ transactions, categories, isPr
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
-        {data.sorted.map((item, index) => {
-           const barWidth = (item.value / data.maxVal) * 100;
-           
-           return (
-             <div key={item.name} className="relative group">
-                <div className="flex justify-between items-end text-sm mb-1 relative z-10">
-                   <div className="flex items-center gap-2">
-                      <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">#{item.name}</span>
-                   </div>
-                   <div className="text-right">
-                      <span className="font-semibold text-slate-800">
-                         {isPrivateMode ? '***' : CURRENCY_FORMATTER.format(item.value)}
-                      </span>
-                   </div>
-                </div>
-                
-                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1">
-                   <div 
-                      className="h-full rounded-full bg-pink-500 transition-all duration-500"
-                      style={{ width: `${barWidth}%` }}
-                   />
-                </div>
-             </div>
-           )
-        })}
+        {data.sorted.length > 0 ? (
+            data.sorted.map((item, index) => {
+               const barWidth = (item.value / data.maxVal) * 100;
+               
+               return (
+                 <div key={item.name} className="relative group">
+                    <div className="flex justify-between items-end text-sm mb-1 relative z-10">
+                       <div className="flex items-center gap-2">
+                          <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">#{item.name}</span>
+                       </div>
+                       <div className="text-right">
+                          <span className="font-semibold text-slate-800">
+                             {isPrivateMode ? '***' : CURRENCY_FORMATTER.format(item.value)}
+                          </span>
+                       </div>
+                    </div>
+                    
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1">
+                       <div 
+                          className="h-full rounded-full bg-pink-500 transition-all duration-500"
+                          style={{ width: `${barWidth}%` }}
+                       />
+                    </div>
+                 </div>
+               )
+            })
+        ) : (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 py-8">
+               <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                  <Hash size={20} className="opacity-40" />
+               </div>
+               <p className="text-sm font-medium">Brak tagów</p>
+               <p className="text-xs mt-1 text-center max-w-[200px]">
+                  Dodawaj tagi do transakcji (np. #wakacje, #remont), aby śledzić koszty projektów.
+               </p>
+            </div>
+        )}
       </div>
     </div>
   );

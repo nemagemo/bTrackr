@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { select, timeMonday, scaleThreshold, timeDays, timeYear, timeMonths } from 'd3';
-import { Layers, Combine } from 'lucide-react';
+import { Layers, Combine, ChevronDown, ChevronUp } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 import { PeriodType } from './AnalysisView';
@@ -187,10 +187,28 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
   const [width, setWidth] = useState(0);
   const [isSplitYears, setIsSplitYears] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState('ALL');
+  const [showAllYears, setShowAllYears] = useState(false);
 
   const savingsCategoryIds = useMemo(() => {
       return new Set(categories.filter(c => c.isIncludedInSavings).map(c => c.id));
   }, [categories]);
+
+  // Identify categories used in transactions to filter the dropdown
+  const usedCategoryIds = useMemo(() => {
+    const ids = new Set<string>();
+    transactions.forEach(t => {
+      if (t.type === TransactionType.EXPENSE && !savingsCategoryIds.has(t.categoryId)) {
+        ids.add(t.categoryId);
+      }
+    });
+    return ids;
+  }, [transactions, savingsCategoryIds]);
+
+  const activeCategories = useMemo(() => 
+    categories
+        .filter(c => c.type === TransactionType.EXPENSE && usedCategoryIds.has(c.id))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pl')),
+  [categories, usedCategoryIds]);
 
   // Measure width
   useEffect(() => {
@@ -216,7 +234,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
   }, [transactions, selectedCategoryId, savingsCategoryIds]);
 
   // Determine which years to show
-  const yearsToShow = useMemo(() => {
+  const availableYears = useMemo(() => {
      if (periodType === 'ALL') {
         const years = new Set(filteredTxs.map(t => new Date(t.date).getFullYear()));
         return Array.from(years).sort((a: number, b: number) => b - a); // Descending
@@ -224,11 +242,17 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
      return [year];
   }, [periodType, year, filteredTxs]);
 
+  const visibleYears = useMemo(() => {
+      if (periodType !== 'ALL') return availableYears;
+      if (showAllYears) return availableYears;
+      return availableYears.slice(0, 2);
+  }, [availableYears, showAllYears, periodType]);
+
   // Pre-calculate data for each year (SPLIT MODE)
   const dataByYear = useMemo(() => {
      const map = new Map<number, Map<string, number>>();
      
-     yearsToShow.forEach(y => {
+     visibleYears.forEach(y => {
         const expenses = filteredTxs.filter(t => 
            t.type === TransactionType.EXPENSE && 
            new Date(t.date).getFullYear() === y
@@ -243,7 +267,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
      });
 
      return map;
-  }, [filteredTxs, yearsToShow]);
+  }, [filteredTxs, visibleYears]);
 
   // Pre-calculate merged data (MERGED MODE)
   const mergedData = useMemo(() => {
@@ -267,7 +291,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
       return dailyTotals;
   }, [filteredTxs, periodType, year]);
 
-  if (yearsToShow.length === 0 && selectedCategoryId === 'ALL') return null;
+  if (availableYears.length === 0 && selectedCategoryId === 'ALL') return null;
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
@@ -284,7 +308,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 min-w-[160px]"
             >
                <option value="ALL">Wszystkie kategorie</option>
-               {categories.filter(c => c.type === TransactionType.EXPENSE && !c.isIncludedInSavings).map(c => (
+               {activeCategories.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                ))}
             </select>
@@ -325,16 +349,37 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                    />
                ) : (
                    // SPLIT VIEW
-                   yearsToShow.length > 0 ? (
-                       yearsToShow.map(y => (
-                          <YearlyHeatmap 
-                             key={y} 
-                             year={y} 
-                             data={dataByYear.get(y) || new Map<string, number>()} 
-                             width={width} 
-                             isPrivateMode={isPrivateMode}
-                          />
-                       ))
+                   visibleYears.length > 0 ? (
+                       <>
+                           {visibleYears.map(y => (
+                              <YearlyHeatmap 
+                                 key={y} 
+                                 year={y} 
+                                 data={dataByYear.get(y) || new Map<string, number>()} 
+                                 width={width} 
+                                 isPrivateMode={isPrivateMode}
+                              />
+                           ))}
+                           
+                           {periodType === 'ALL' && availableYears.length > 2 && (
+                              <div className="flex justify-center mt-4 mb-4">
+                                  <button 
+                                      onClick={() => setShowAllYears(!showAllYears)}
+                                      className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-600 text-xs font-medium rounded-full hover:bg-slate-100 transition-colors border border-slate-200"
+                                  >
+                                      {showAllYears ? (
+                                          <>
+                                              <ChevronUp size={14} /> Pokaż mniej lat
+                                          </>
+                                      ) : (
+                                          <>
+                                              <ChevronDown size={14} /> Pokaż starsze lata ({availableYears.length - 2})
+                                          </>
+                                      )}
+                                  </button>
+                              </div>
+                           )}
+                       </>
                    ) : (
                        <div className="text-center py-8 text-slate-400 text-sm">Brak wydatków dla wybranej kategorii.</div>
                    )

@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+
+import React, { useMemo, useState, useEffect } from 'react';
 import { Grip, LayoutList, LayoutGrid } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { StackedBarChart } from './D3Charts';
@@ -32,13 +33,36 @@ export const CategoryTrendAnalysis: React.FC<CategoryTrendAnalysisProps> = ({
    onToggleAggregation,
    isPrivateMode
 }) => {
+  // 1. Identify categories that actually have expense transactions
+  const usedCategoryIds = useMemo(() => {
+    const ids = new Set<string>();
+    transactions.forEach(t => {
+      if (t.type === TransactionType.EXPENSE) {
+        ids.add(t.categoryId);
+      }
+    });
+    return ids;
+  }, [transactions]);
+
   const expenseCategories = useMemo(() => 
     categories
-      .filter(c => c.type === TransactionType.EXPENSE)
+      .filter(c => c.type === TransactionType.EXPENSE && usedCategoryIds.has(c.id))
       .sort((a, b) => a.name.localeCompare(b.name, 'pl')), 
-  [categories]);
+  [categories, usedCategoryIds]);
   
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(expenseCategories[0]?.id || '');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  
+  // Update selected category if it's invalid or empty, default to first available
+  useEffect(() => {
+      if (expenseCategories.length > 0) {
+          if (!selectedCategoryId || !expenseCategories.find(c => c.id === selectedCategoryId)) {
+              setSelectedCategoryId(expenseCategories[0].id);
+          }
+      } else {
+          setSelectedCategoryId('');
+      }
+  }, [expenseCategories, selectedCategoryId]);
+
   const selectedCategory = categories.find(c => c.id === selectedCategoryId);
 
   const chartData = useMemo(() => {
@@ -176,6 +200,14 @@ export const CategoryTrendAnalysis: React.FC<CategoryTrendAnalysisProps> = ({
 
     return Object.values(buckets);
   }, [transactions, selectedCategoryId, filterYear, periodType, periodValue, selectedCategory, historyAggregation, yearAggregation]);
+
+  if (!selectedCategoryId && expenseCategories.length === 0) {
+      return (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center min-h-[200px]">
+            <p className="text-slate-400 text-sm">Brak wydatków do analizy.</p>
+        </div>
+      );
+  }
 
   if (!selectedCategoryId) return null;
 
