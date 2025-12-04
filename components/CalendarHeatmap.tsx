@@ -24,23 +24,33 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
     const svg = select(containerRef.current);
     svg.selectAll("*").remove();
 
-    // Config
-    const cellSize = 12;
-    const cellGap = 3;
-    const monthLabelHeight = 20;
-    const margin = { top: 20, right: 20, bottom: 20, left: 40 };
-    
     // Layout Calculation
-    // We display standard calendar: Rows = Days (Mon-Sun), Cols = Weeks
     const startDate = new Date(year, 0, 1);
     const endDate = new Date(year, 11, 31);
     
-    // Helper to get week number relative to start of year
+    // Config Margins
+    const margin = { top: 20, right: 10, bottom: 20, left: 30 };
+    const monthLabelHeight = 20;
+    const cellGap = 2; // Tighter gap for better responsiveness
+
+    // Calculate number of weeks to fit
     const countWeeks = timeMonday.count(startDate, endDate) + 2;
     
-    const chartWidth = Math.max(width, countWeeks * (cellSize + cellGap) + margin.left + margin.right);
+    // Dynamic Cell Size Calculation
+    const availableWidth = width - margin.left - margin.right;
+    
+    // Calculate optimal cell size to fit width
+    // Formula: (cellSize + gap) * weeks = availableWidth
+    let calculatedCellSize = Math.floor((availableWidth / countWeeks) - cellGap);
+    
+    // Clamping to maintain readability
+    // Min 10px ensures it's readable on mobile (might scroll), Max 18px prevents huge blocks on desktop
+    const cellSize = Math.max(10, Math.min(18, calculatedCellSize)); 
+    
+    const chartWidth = countWeeks * (cellSize + cellGap) + margin.left + margin.right;
     const chartHeight = 7 * (cellSize + cellGap) + monthLabelHeight + margin.top;
 
+    // Apply calculated dimensions
     svg.attr("width", chartWidth).attr("height", chartHeight);
     
     const g = svg.append("g").attr("transform", `translate(${margin.left}, ${margin.top})`);
@@ -80,7 +90,7 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
         const val = data.get(dateStr);
         return (typeof val === 'number') ? colorScale(val) : '#f8fafc'; // empty day color
       })
-      .attr("rx", 2)
+      .attr("rx", Math.max(1, cellSize / 5)) // Dynamic radius
       .attr("stroke", "#e2e8f0") // border for empty days
       .attr("stroke-width", (d: any) => {
          const date = d as Date;
@@ -140,7 +150,7 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
           return timeMonday.count(startOfYear, d) * (cellSize + cellGap);
       })
       .attr("y", 10)
-      .attr("font-size", "10px")
+      .attr("font-size", `${Math.max(9, cellSize)}px`) // Scale font slightly
       .attr("fill", "#64748b")
       .attr("font-weight", "500");
 
@@ -150,10 +160,10 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
       .data(dayLabels)
       .enter().append("text")
       .text(d => d)
-      .attr("x", -10)
-      .attr("y", (d, i) => monthLabelHeight + i * (cellSize + cellGap) + 10)
+      .attr("x", -6)
+      .attr("y", (d, i) => monthLabelHeight + i * (cellSize + cellGap) + cellSize/1.5)
       .attr("text-anchor", "end")
-      .attr("font-size", "9px")
+      .attr("font-size", `${Math.max(8, cellSize - 2)}px`)
       .attr("fill", "#94a3b8");
 
   }, [data, width, year, isPrivateMode]);
@@ -163,8 +173,9 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
         <h4 className="text-sm font-bold text-slate-700 mb-2 border-l-4 border-indigo-500 pl-2">
            {customTitle || year}
         </h4>
-        <div className="w-full overflow-x-auto pb-2">
-            <svg ref={containerRef} className="block" style={{ minWidth: '100%' }}></svg>
+        <div className="w-full overflow-x-auto pb-2 custom-scrollbar">
+            {/* SVG width is managed by D3 logic above, usually matching container unless min-size takes over */}
+            <svg ref={containerRef} className="block mx-auto"></svg>
         </div>
         <div 
           ref={tooltipRef}
