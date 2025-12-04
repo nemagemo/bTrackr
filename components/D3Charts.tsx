@@ -289,14 +289,29 @@ export const ComboChart: React.FC<ChartProps> = ({
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
     const x = scaleBand().domain(data.map(d => d.name)).range([0, chartWidth]).padding(0.3);
-    const maxAmountRaw = max(data, d => Math.max(d.income, d.expense)) || 0;
-    const minAmountRaw = min(data, d => d.income - d.expense) || 0;
+    
+    // --- DYNAMIC DOMAIN LOGIC ---
+    // Max value is generally the max of Bars (Income/Expense) or potentially a very high Surplus.
+    const maxBarValue = max(data, d => Math.max(d.income, d.expense)) || 0;
+    
+    // Default min/max
+    let domainMin = 0;
+    let domainMax = maxBarValue;
+
+    // If Surplus line is visible, it might go negative (deficit) or be higher than bars
+    if (showSurplusLine) {
+        const minSurplus = min(data, d => d.income - d.expense) || 0;
+        const maxSurplus = max(data, d => d.income - d.expense) || 0;
+        domainMin = Math.min(0, minSurplus);
+        domainMax = Math.max(maxBarValue, maxSurplus);
+    }
     
     const yLeft = scaleLinear()
-      .domain([Math.min(0, minAmountRaw), maxAmountRaw])
+      .domain([domainMin, domainMax])
       .nice()
       .range([chartHeight, 0]);
 
+    // Align the zero of the Right Axis with the zero of the Left Axis
     const [yLeftMin, yLeftMax] = yLeft.domain();
     const maxRateData = max(data, d => d.savingsRate) || 0;
     const yRightMaxBase = Math.max(100, maxRateData);
