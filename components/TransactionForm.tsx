@@ -1,9 +1,7 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Wand2, X, Database } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, X, Database } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button } from './Button';
-import { suggestCategory } from '../services/geminiService';
 import { TagInput } from './TagInput';
 
 interface TransactionFormProps {
@@ -22,7 +20,6 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
   const [categoryId, setCategoryId] = useState<string>('');
   const [subcategoryId, setSubcategoryId] = useState<string>('');
   const [tags, setTags] = useState<string[]>([]);
-  const [isSuggesting, setIsSuggesting] = useState(false);
 
   const availableCategories = categories.filter(c => c.type === type);
   const currentCategory = categories.find(c => c.id === categoryId);
@@ -68,21 +65,6 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
     const defaultCat = availableCategories.find(c => c.name === defaultName) || availableCategories[0];
     setCategoryId(defaultCat?.id || '');
     setSubcategoryId('');
-  };
-
-  const handleAiSuggest = async () => {
-    if (!description) return;
-    setIsSuggesting(true);
-    const suggestedId = await suggestCategory(description, categories);
-    if (suggestedId) {
-      const cat = categories.find(c => c.id === suggestedId);
-      if (cat) {
-        setType(cat.type);
-        setCategoryId(cat.id);
-        setSubcategoryId('');
-      }
-    }
-    setIsSuggesting(false);
   };
 
   return (
@@ -147,15 +129,6 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
                 </button>
               )}
             </div>
-            <button
-              type="button"
-              onClick={handleAiSuggest}
-              disabled={!description || isSuggesting}
-              className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 disabled:opacity-50 transition-colors"
-              title="Sugeruj kategorię (AI)"
-            >
-              {isSuggesting ? <span className="animate-spin text-xs">↻</span> : <Wand2 size={18} />}
-            </button>
           </div>
         </div>
 
