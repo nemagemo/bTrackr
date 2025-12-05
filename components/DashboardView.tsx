@@ -5,6 +5,7 @@ import { StatCard } from './StatCard';
 import { BudgetPulse } from './BudgetPulse';
 import { TransactionForm } from './TransactionForm';
 import { TransactionList } from './TransactionList';
+import { UpcomingEvents } from './UpcomingEvents'; // Import
 import { CURRENCY_FORMATTER } from '../constants';
 import { useFinance } from '../context/FinanceContext';
 
@@ -62,6 +63,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onSetActiveTab, on
           isPrivateMode={isPrivateMode}
         />
       </div>
+
+      {/* NEW: Upcoming Events Widget */}
+      <UpcomingEvents />
 
       {/* Main Content Stack */}
       

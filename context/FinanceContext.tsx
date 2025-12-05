@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useMemo, ReactNode, useEffect } from 'react';
-import { CategoryItem, Transaction, TransactionType, BackupData, SubcategoryItem, FinancialSummary } from '../types';
+import { CategoryItem, Transaction, TransactionType, BackupData, SubcategoryItem, FinancialSummary, RecurringTransaction, Frequency } from '../types';
 import { DEFAULT_CATEGORIES, SYSTEM_IDS } from '../constants';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useDataMigration } from '../hooks/useDataMigration';
@@ -11,6 +11,7 @@ interface FinanceContextType {
   // State
   transactions: Transaction[];
   categories: CategoryItem[];
+  recurringTransactions: RecurringTransaction[];
   savedTags: string[];
   isPrivateMode: boolean;
   theme: Theme;
@@ -28,6 +29,12 @@ interface FinanceContextType {
   deleteTransaction: (id: string) => void;
   clearTransactions: () => void;
   
+  // Recurring Actions
+  addRecurringTransaction: (rule: Omit<RecurringTransaction, 'id'>) => void;
+  deleteRecurringTransaction: (id: string) => void;
+  processRecurringTransaction: (ruleId: string, amount?: number) => void; // For manual approval
+  skipRecurringTransaction: (ruleId: string) => void; // Just advance date without paying
+
   // Bulk Actions
   bulkUpdateCategory: (ids: string[], categoryId: string, subcategoryId?: string) => void;
   bulkUpdateTags: (ids: string[], tags: string[], mode: 'ADD' | 'REPLACE') => void;
@@ -44,7 +51,7 @@ interface FinanceContextType {
   deleteTag: (tagName: string) => void;
 
   // Import/Export
-  importData: (importedTxs: Transaction[], clear: boolean, newCategories?: CategoryItem[]) => void;
+  importData: (importedTransactions: Transaction[], clearHistory: boolean, newCategories?: CategoryItem[]) => void;
   restoreBackup: (backup: BackupData) => void;
   loadDemoData: () => void;
 }
@@ -54,6 +61,7 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [categories, setCategories] = useLocalStorage<CategoryItem[]>('btrackr_categories', DEFAULT_CATEGORIES);
   const [transactions, setTransactions] = useLocalStorage<Transaction[]>('btrackr_transactions', []);
+  const [recurringTransactions, setRecurringTransactions] = useLocalStorage<RecurringTransaction[]>('btrackr_recurring', []);
   const [savedTags, setSavedTags] = useLocalStorage<string[]>('btrackr_tags', []);
   const [isPrivateMode, setIsPrivateMode] = useLocalStorage<boolean>('btrackr_private_mode', false);
   const [theme, setTheme] = useLocalStorage<Theme>('btrackr_theme', 'light');
@@ -74,6 +82,63 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
+
+  // --- Recurring Engine ---
+  // Helper to calculate next date
+  const calculateNextDate = (dateStr: string, freq: Frequency): string => {
+    const date = new Date(dateStr);
+    if (freq === 'WEEKLY') date.setDate(date.getDate() + 7);
+    else if (freq === 'MONTHLY') date.setMonth(date.getMonth() + 1);
+    else if (freq === 'YEARLY') date.setFullYear(date.getFullYear() + 1);
+    return date.toISOString().split('T')[0];
+  };
+
+  useEffect(() => {
+    // Check for auto-pay transactions that are due
+    const today = new Date().toISOString().split('T')[0];
+    let newTransactions: Transaction[] = [];
+    let updatedRecurring = [...recurringTransactions];
+    let hasChanges = false;
+
+    updatedRecurring = updatedRecurring.map(rule => {
+      // Only process AUTO pay rules here
+      if (rule.autoPay && rule.nextDueDate <= today) {
+        hasChanges = true;
+        
+        let currentDueDate = rule.nextDueDate;
+        
+        // Loop while the due date is in the past or today (Catch-up logic)
+        // This ensures if we missed 3 months, we generate 3 transactions
+        while (currentDueDate <= today) {
+            // 1. Create Transaction for this specific occurrence
+            const newTx: Transaction = {
+              id: crypto.randomUUID(),
+              date: currentDueDate, // Use the historical date, not 'today'
+              description: rule.description,
+              amount: rule.amount,
+              type: rule.type,
+              categoryId: rule.categoryId,
+              subcategoryId: rule.subcategoryId,
+              tags: rule.tags,
+              isRecurring: true
+            };
+            newTransactions.push(newTx);
+
+            // 2. Advance to the next period
+            currentDueDate = calculateNextDate(currentDueDate, rule.frequency);
+        }
+
+        // 3. Update the rule with the new future date
+        return { ...rule, nextDueDate: currentDueDate };
+      }
+      return rule;
+    });
+
+    if (hasChanges) {
+      setTransactions(prev => [...newTransactions, ...prev]);
+      setRecurringTransactions(updatedRecurring);
+    }
+  }, [recurringTransactions]); // Dependency on recurringTransactions ensures it runs on load
 
   // --- Derived State ---
   const allTags = useMemo(() => {
@@ -101,12 +166,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
   }, [transactions, categories]);
 
-  // Balance (Nadwyżka Finansowa) = Przychody - Wydatki Konsumpcyjne.
-  // To jest kwota, która zostaje nam po opłaceniu życia, którą możemy przeznaczyć na oszczędności.
   summary.balance = summary.totalIncome - summary.totalExpense;
-
-  // Operational Balance (Dostępne Środki / Cashflow) = Przychody - Wydatki - Przelane Oszczędności.
-  // To jest realna gotówka, która pozostała na koncie bieżącym po opłaceniu wszystkiego (w tym przelewów na oszczędności).
   const operationalBalance = summary.totalIncome - summary.totalExpense - summary.savingsAmount;
 
   // --- Helpers ---
@@ -146,6 +206,50 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const clearTransactions = () => setTransactions([]);
+
+  // Recurring Actions
+  const addRecurringTransaction = (rule: Omit<RecurringTransaction, 'id'>) => {
+    const newRule: RecurringTransaction = {
+      ...rule,
+      id: crypto.randomUUID(),
+      subcategoryId: ensureSubcategory(rule.categoryId, rule.subcategoryId)
+    };
+    setRecurringTransactions(prev => [...prev, newRule]);
+  };
+
+  const deleteRecurringTransaction = (id: string) => {
+    setRecurringTransactions(prev => prev.filter(r => r.id !== id));
+  };
+
+  const processRecurringTransaction = (ruleId: string, amount?: number) => {
+    const rule = recurringTransactions.find(r => r.id === ruleId);
+    if (!rule) return;
+
+    // 1. Create the transaction
+    const newTx: Transaction = {
+      id: crypto.randomUUID(),
+      date: rule.nextDueDate, // Or new Date().toISOString() if we want "paid today"
+      description: rule.description,
+      amount: amount !== undefined ? amount : rule.amount, // Allow override
+      type: rule.type,
+      categoryId: rule.categoryId,
+      subcategoryId: rule.subcategoryId,
+      tags: rule.tags,
+      isRecurring: true
+    };
+    setTransactions(prev => [newTx, ...prev]);
+
+    // 2. Advance the rule
+    const nextDate = calculateNextDate(rule.nextDueDate, rule.frequency);
+    setRecurringTransactions(prev => prev.map(r => r.id === ruleId ? { ...r, nextDueDate: nextDate } : r));
+  };
+
+  const skipRecurringTransaction = (ruleId: string) => {
+    const rule = recurringTransactions.find(r => r.id === ruleId);
+    if (!rule) return;
+    const nextDate = calculateNextDate(rule.nextDueDate, rule.frequency);
+    setRecurringTransactions(prev => prev.map(r => r.id === ruleId ? { ...r, nextDueDate: nextDate } : r));
+  };
 
   const bulkUpdateCategory = (ids: string[], newCategoryId: string, newSubcategoryId?: string) => {
      setTransactions(prev => prev.map(t => {
@@ -208,7 +312,6 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
        if (c.id !== catId) return c;
        return { ...c, subcategories: c.subcategories.filter(s => s.id !== subId) };
     }));
-    // Remap transactions to 'Inne'
     const cat = categories.find(c => c.id === catId);
     const inneSub = cat?.subcategories.find(s => s.name === 'Inne');
     const targetSubId = inneSub ? inneSub.id : undefined;
@@ -271,6 +374,9 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const restoreBackup = (backup: BackupData) => {
      setCategories(backup.categories);
      setTransactions(backup.transactions);
+     if (backup.recurringTransactions) {
+        setRecurringTransactions(backup.recurringTransactions);
+     }
      setIsPrivateMode(backup.settings.isPrivateMode);
   };
 
@@ -282,9 +388,10 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const value = {
-    transactions, categories, savedTags, isPrivateMode, setIsPrivateMode, theme, toggleTheme,
+    transactions, categories, recurringTransactions, savedTags, isPrivateMode, setIsPrivateMode, theme, toggleTheme,
     allTags, summary, operationalBalance,
     addTransaction, updateTransaction, deleteTransaction, clearTransactions,
+    addRecurringTransaction, deleteRecurringTransaction, processRecurringTransaction, skipRecurringTransaction,
     bulkUpdateCategory, bulkUpdateTags, splitTransaction,
     updateCategories, deleteCategory, deleteSubcategory,
     addTag, renameTag, deleteTag,

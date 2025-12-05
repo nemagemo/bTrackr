@@ -12,6 +12,8 @@ export enum TransactionType {
   EXPENSE = 'EXPENSE'
 }
 
+export type Frequency = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+
 export interface SubcategoryItem {
   id: string;
   name: string;
@@ -47,6 +49,23 @@ export interface CategoryItem {
 }
 
 /**
+ * Szablon transakcji cyklicznej.
+ * Nie wpływa na saldo, służy do generowania realnych transakcji.
+ */
+export interface RecurringTransaction {
+  id: string;
+  description: string;
+  amount: number;
+  type: TransactionType;
+  categoryId: string;
+  subcategoryId?: string;
+  frequency: Frequency;
+  nextDueDate: string; // ISO Date (YYYY-MM-DD)
+  autoPay: boolean; // True = automat (Netflix), False = przypomnienie (Prąd)
+  tags?: string[];
+}
+
+/**
  * Główny obiekt transakcji.
  */
 export interface Transaction {
@@ -58,6 +77,7 @@ export interface Transaction {
   subcategoryId?: string; // Odnosi się do SubcategoryItem.id
   date: string; // Format ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ). UWAGA: Zalecane ustawianie godziny na 12:00, aby uniknąć przesunięć stref czasowych.
   tags?: string[]; // Niezależny system tagowania (np. #wakacje, #projektX)
+  isRecurring?: boolean; // Czy transakcja powstała z szablonu cyklicznego
 }
 
 /**
@@ -85,6 +105,7 @@ export interface BackupData {
   timestamp: string;
   categories: CategoryItem[];
   transactions: Transaction[];
+  recurringTransactions?: RecurringTransaction[]; // New field
   settings: {
     isPrivateMode: boolean;
   };

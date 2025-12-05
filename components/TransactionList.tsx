@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Trash2, TrendingDown, TrendingUp, Sparkles, Database } from 'lucide-react';
+import { Trash2, TrendingDown, TrendingUp, Sparkles, Database, Repeat } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { getCategoryColor, getCategoryName, CURRENCY_FORMATTER } from '../constants';
 import { Button } from './Button';
@@ -67,6 +67,11 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{transaction.description}</p>
+                   {transaction.isRecurring && (
+                      <span title="Transakcja cykliczna" className="text-slate-400 dark:text-slate-500">
+                         <Repeat size={10} />
+                      </span>
+                   )}
                    {transaction.tags && transaction.tags.map(tag => (
                       <span key={tag} className="text-[9px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded font-bold hidden sm:inline-block">
                          #{tag}
