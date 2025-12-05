@@ -1,11 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Wallet, ArrowDownCircle, ArrowUpCircle, LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, PiggyBank, Upload } from 'lucide-react';
-import { Transaction, TransactionType, CategoryItem, SubcategoryItem, BackupData } from './types';
-import { DEFAULT_CATEGORIES, SYSTEM_IDS, CURRENCY_FORMATTER } from './constants';
-import { StatCard } from './components/StatCard';
-import { TransactionForm } from './components/TransactionForm';
-import { TransactionList } from './components/TransactionList';
+import React, { useState } from 'react';
+import { LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, Upload } from 'lucide-react';
+import { Transaction } from './types';
 import { AnalysisView } from './components/AnalysisView';
 import { HistoryView } from './components/HistoryView';
 import { SettingsView } from './components/SettingsView';
@@ -14,46 +10,28 @@ import { EditTransactionModal } from './components/EditTransactionModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { BulkCategoryModal } from './components/BulkCategoryModal';
 import { BulkTagModal } from './components/BulkTagModal';
-import { BudgetPulse } from './components/BudgetPulse';
 import { Logo } from './components/Logo';
+import { DashboardView } from './components/DashboardView';
+import { FinanceProvider, useFinance } from './context/FinanceContext';
 
 type Tab = 'dashboard' | 'analysis' | 'history' | 'settings';
 
 /**
- * Główny komponent aplikacji (Root).
- * Odpowiada za:
- * 1. Zarządzanie stanem globalnym (transakcje, kategorie, ustawienia).
- * 2. Persystencję danych w LocalStorage.
- * 3. Routing (zakładki).
- * 4. Migracje struktur danych między wersjami.
- * 5. Logikę biznesową obliczania sald (Balance Calculation).
+ * Inner App Component holding the UI Logic.
+ * Needs to be inside FinanceProvider to use the hook.
  */
-const App: React.FC = () => {
-  // --- GLOBAL STATE ---
-  // Ładowanie z localStorage przy starcie.
-  
-  const [categories, setCategories] = useState<CategoryItem[]>(() => {
-    const saved = localStorage.getItem('btrackr_categories');
-    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
-  });
+const AppContent: React.FC = () => {
+  // Global State from Context
+  const { 
+    transactions, categories, isPrivateMode, setIsPrivateMode, allTags,
+    updateTransaction, deleteTransaction, clearTransactions,
+    updateCategories, deleteCategory, deleteSubcategory,
+    renameTag, deleteTag, addTag,
+    importData, restoreBackup, loadDemoData,
+    bulkUpdateCategory, bulkUpdateTags, splitTransaction
+  } = useFinance();
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('btrackr_transactions');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Independent tag list (for tags created in settings but not yet used)
-  const [savedTags, setSavedTags] = useState<string[]>(() => {
-    const saved = localStorage.getItem('btrackr_tags');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [isPrivateMode, setIsPrivateMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('btrackr_private_mode');
-    return saved ? JSON.parse(saved) : false;
-  });
-
-  // --- UI STATE ---
+  // UI State
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -72,380 +50,22 @@ const App: React.FC = () => {
     action: () => {},
   });
 
-  // --- PERSISTENCE ---
-  // Automatyczny zapis do localStorage przy zmianie stanu
-  useEffect(() => {
-    localStorage.setItem('btrackr_transactions', JSON.stringify(transactions));
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem('btrackr_categories', JSON.stringify(categories));
-  }, [categories]);
-
-  useEffect(() => {
-    localStorage.setItem('btrackr_tags', JSON.stringify(savedTags));
-  }, [savedTags]);
-
-  useEffect(() => {
-    localStorage.setItem('btrackr_private_mode', JSON.stringify(isPrivateMode));
-  }, [isPrivateMode]);
-
-  // Pobranie wszystkich unikalnych tagów (zarówno z transakcji jak i zapisanych ręcznie)
-  const allTags = useMemo(() => {
-     const tags = new Set<string>(savedTags);
-     transactions.forEach(t => t.tags?.forEach(tag => tags.add(tag)));
-     return Array.from(tags).sort();
-  }, [transactions, savedTags]);
-
-  // --- MIGRATION LOGIC ---
-  // Uruchamia się raz po załadowaniu aplikacji.
-  // Służy do aktualizacji struktur danych użytkowników powracających ze starszych wersji aplikacji.
-  useEffect(() => {
-    const performMigration = () => {
-       let updatedCategories = [...categories];
-       let updatedTransactions = [...transactions];
-       let hasChanges = false;
-
-       // MIGRACJA 1 (v1.0.1): Ustawienie flag isIncludedInSavings
-       // Starsze wersje nie miały tej flagi, co powodowało błędne wyliczanie salda (traktowanie oszczędności jako koszt).
-       updatedCategories = updatedCategories.map(c => {
-          if (c.id === SYSTEM_IDS.SAVINGS || c.id === SYSTEM_IDS.INVESTMENTS) {
-             if (c.isIncludedInSavings !== true) {
-                console.log(`Migrating category ${c.name}: setting isIncludedInSavings=true`);
-                hasChanges = true;
-                return { ...c, isIncludedInSavings: true };
-             }
-          }
-          return c;
-       });
-
-       // MIGRACJA 2 (v1.0.2): Rozbicie starej kategorii 'cat_liabilities' (Zobowiązania i Inne)
-       // Nowa struktura wymaga osobnych kategorii na Kredyty, Ubezpieczenia i Przelewy Wewnętrzne.
-       const oldLiabilityCat = updatedCategories.find(c => c.id === 'cat_liabilities');
-       if (oldLiabilityCat) {
-          console.log("Migrating 'Zobowiązania i Inne' structure...");
-          hasChanges = true;
-
-          const createCatIfMissing = (id: string, name: string, color: string, subNames: string[]) => {
-             if (!updatedCategories.some(c => c.id === id)) {
-                updatedCategories.push({
-                   id, name, type: TransactionType.EXPENSE, color, isSystem: false, isIncludedInSavings: false,
-                   subcategories: subNames.map(s => ({ id: crypto.randomUUID(), name: s }))
-                });
-             }
-          };
-
-          // Tworzenie nowych kategorii docelowych jeśli nie istnieją
-          createCatIfMissing(SYSTEM_IDS.INTERNAL_TRANSFER, 'Przelew własny', '#0ea5e9', ['Inne']);
-          createCatIfMissing('cat_insurance', 'Ubezpieczenia', '#db2777', ['Ubezpieczenie na życie', 'Ubezpieczenie podróżne', 'Ubezpieczenie auta', 'Ubezpieczenie domu', 'Inne']);
-          createCatIfMissing('cat_loans', 'Zobowiązania', '#7f1d1d', ['Kredyt hipoteczny', 'Kredyt konsumpcyjny', 'Pożyczka', 'Inne']);
-          createCatIfMissing(SYSTEM_IDS.OTHER_EXPENSE, 'Inne', '#94a3b8', ['Inne']);
-
-          // Helper do mapowania ID podkategorii
-          const getTargetSubId = (catId: string, subNameToCheck: string) => {
-             const cat = updatedCategories.find(c => c.id === catId);
-             if (!cat) return '';
-             const sub = cat.subcategories.find(s => s.name.toLowerCase() === subNameToCheck.toLowerCase());
-             if (sub) return sub.id;
-             const inne = cat.subcategories.find(s => s.name.toLowerCase() === 'inne');
-             return inne ? inne.id : (cat.subcategories[0]?.id || '');
-          };
-
-          // Przepisanie transakcji ze starej kategorii do nowych na podstawie nazw podkategorii
-          updatedTransactions = updatedTransactions.map(t => {
-             if (t.categoryId === 'cat_liabilities') {
-                const oldSub = oldLiabilityCat.subcategories.find(s => s.id === t.subcategoryId);
-                const oldSubName = oldSub ? oldSub.name.toLowerCase() : 'inne';
-
-                let targetCatId = 'cat_loans'; 
-                let targetSubName = 'Inne';
-
-                if (oldSubName.includes('ubezpiecz')) {
-                   targetCatId = 'cat_insurance';
-                } else if (oldSubName.includes('przelew')) {
-                   targetCatId = SYSTEM_IDS.INTERNAL_TRANSFER;
-                } else if (oldSubName === 'inne' || oldSubName === 'zobowiązania i inne') {
-                   targetCatId = SYSTEM_IDS.OTHER_EXPENSE;
-                } else {
-                   targetCatId = 'cat_loans';
-                }
-
-                return {
-                   ...t,
-                   categoryId: targetCatId,
-                   subcategoryId: getTargetSubId(targetCatId, targetSubName)
-                };
-             }
-             return t;
-          });
-
-          // Usunięcie przestarzałej kategorii
-          updatedCategories = updatedCategories.filter(c => c.id !== 'cat_liabilities');
-       }
-
-       if (hasChanges) {
-          setCategories(updatedCategories);
-          setTransactions(updatedTransactions);
-       }
-    };
-
-    performMigration();
-  }, []); // Run once on mount
-
-  /**
-   * KLUCZOWA LOGIKA FINANSOWA (BALANCE CALCULATION).
-   * 
-   * Zaktualizowana logika (User Request v3):
-   * "Transakcje z kategorii które wliczaja sie do stopy oszczędności NIE traktuj jako wydatek."
-   * 
-   * totalIncome: Suma wpływów.
-   * totalExpense: Suma wydatków KONSUMPCYJNYCH (bez oszczędności).
-   * savingsAmount: Kwota wydana na kategorie z flagą `isIncludedInSavings`.
-   * 
-   * Balance (Dostępne środki - Księgowe) = Income - Consumption(TotalExpense). 
-   * (Oszczędności są wliczone w Balance jako posiadane środki - to jest widoczne w Analizie).
-   * 
-   * Operational Balance (Dostępne środki - Operacyjne "na życie") = Income - TotalExpense - SavingsAmount.
-   * (Używane na Pulpicie).
-   */
-  const summary = useMemo(() => {
-    return transactions.reduce(
-      (acc, t) => {
-        const cat = categories.find(c => c.id === t.categoryId);
-        
-        if (t.type === TransactionType.INCOME) {
-          acc.totalIncome += t.amount;
-        } else {
-          // Jeśli kategoria jest oszczędnościowa, NIE dodajemy do totalExpense
-          if (cat?.isIncludedInSavings) {
-            acc.savingsAmount += t.amount;
-          } else {
-            acc.totalExpense += t.amount;
-          }
-        }
-        return acc;
-      },
-      { totalIncome: 0, totalExpense: 0, savingsAmount: 0 }
-    );
-  }, [transactions, categories]);
-
-  // Saldo operacyjne (na życie) = Przychody - Wydatki - Oszczędności
-  const operationalBalance = summary.totalIncome - summary.totalExpense - summary.savingsAmount;
-
-  // --- EVENT HANDLERS ---
-
-  const ensureSubcategory = (categoryId: string, providedSubId?: string): string => {
-    if (providedSubId) return providedSubId;
-
-    const category = categories.find(c => c.id === categoryId);
-    if (!category) return ''; 
-
-    const inneSub = category.subcategories.find(s => s.name.toLowerCase() === 'inne');
-    if (inneSub) return inneSub.id;
-
-    const newSubId = crypto.randomUUID();
-    const newSub: SubcategoryItem = { id: newSubId, name: 'Inne' };
-    
-    setCategories(prev => prev.map(c => 
-      c.id === categoryId ? { ...c, subcategories: [...c.subcategories, newSub] } : c
-    ));
-    
-    return newSubId;
-  };
-
-  const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
-    const transaction: Transaction = {
-      ...newTx,
-      id: crypto.randomUUID(),
-      subcategoryId: ensureSubcategory(newTx.categoryId, newTx.subcategoryId)
-    };
-    setTransactions(prev => [transaction, ...prev]);
-  };
-
-  const handleDeleteTransaction = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
-  };
-
-  const handleUpdateTransaction = (updated: Transaction) => {
-    setTransactions(prev => prev.map(t => t.id === updated.id ? {
-       ...updated,
-       subcategoryId: ensureSubcategory(updated.categoryId, updated.subcategoryId)
-    } : t));
-  };
-
-  const handleClearHistory = () => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Wyczyść całą historię',
-      message: 'Czy na pewno chcesz usunąć wszystkie transakcje? Tej operacji nie można cofnąć.',
-      action: () => setTransactions([]),
-    });
-  };
-
-  const handleImport = (importedTransactions: Transaction[], clearHistory: boolean, newCategories?: CategoryItem[]) => {
-    if (newCategories) {
-       setCategories(prev => {
-          const combined = [...prev];
-          newCategories.forEach(newCat => {
-             if (!combined.find(c => c.name.toLowerCase() === newCat.name.toLowerCase())) {
-                combined.push(newCat);
-             }
-          });
-          return combined;
-       });
-    }
-
-    if (clearHistory) {
-      setTransactions(importedTransactions);
-    } else {
-      setTransactions(prev => {
-        const existingSignatures = new Set(prev.map(t => `${t.date}-${t.amount}-${t.description}`));
-        const newUnique = importedTransactions.filter(t => !existingSignatures.has(`${t.date}-${t.amount}-${t.description}`));
-        return [...newUnique, ...prev];
-      });
-    }
-  };
-
-  const handleRestoreBackup = (backup: BackupData) => {
-     setCategories(backup.categories);
-     setTransactions(backup.transactions);
-     setIsPrivateMode(backup.settings.isPrivateMode);
-  };
-
-  const handleUpdateCategories = (newCategories: CategoryItem[]) => {
-    setCategories(newCategories);
-  };
-
-  const handleDeleteCategory = (id: string, targetCategoryId?: string, targetSubcategoryId?: string) => {
-    setCategories(prev => prev.filter(c => c.id !== id));
-    
-    const fallbackId = SYSTEM_IDS.OTHER_EXPENSE;
-    const finalTargetId = targetCategoryId || fallbackId;
-
-    setTransactions(prev => prev.map(t => {
-      if (t.categoryId === id) {
-        return { 
-           ...t, 
-           categoryId: finalTargetId,
-           subcategoryId: targetSubcategoryId || undefined
-        };
-      }
-      return t;
-    }));
-  };
-
-  const handleDeleteSubcategory = (catId: string, subId: string) => {
-    setCategories(prev => prev.map(c => {
-       if (c.id !== catId) return c;
-       return { ...c, subcategories: c.subcategories.filter(s => s.id !== subId) };
-    }));
-
-    const cat = categories.find(c => c.id === catId);
-    const inneSub = cat?.subcategories.find(s => s.name === 'Inne');
-    const targetSubId = inneSub ? inneSub.id : undefined;
-
-    setTransactions(prev => prev.map(t => {
-       if (t.categoryId === catId && t.subcategoryId === subId) {
-          return { ...t, subcategoryId: targetSubId };
-       }
-       return t;
-    }));
-  };
-  
-  const handleBulkUpdate = (ids: string[], newCategoryId: string, newSubcategoryId?: string) => {
-     setTransactions(prev => prev.map(t => {
-        if (ids.includes(t.id)) {
-           return {
-              ...t,
-              categoryId: newCategoryId,
-              subcategoryId: ensureSubcategory(newCategoryId, newSubcategoryId)
-           };
-        }
-        return t;
-     }));
-     setIsBulkModalOpen(false);
-  };
-
-  const handleBulkTagUpdate = (ids: string[], tags: string[], mode: 'ADD' | 'REPLACE') => {
-      setTransactions(prev => prev.map(t => {
-          if (ids.includes(t.id)) {
-              let newTags = t.tags || [];
-              if (mode === 'REPLACE') {
-                  newTags = tags;
-              } else {
-                  // Add only unique new tags
-                  const existingSet = new Set(newTags);
-                  tags.forEach(tag => existingSet.add(tag));
-                  newTags = Array.from(existingSet);
-              }
-              return { ...t, tags: newTags };
-          }
-          return t;
-      }));
-      setIsBulkTagModalOpen(false);
-  };
-
-  const handleRenameTag = (oldName: string, newName: string) => {
-     // Rename in transactions
-     setTransactions(prev => prev.map(t => {
-        if (t.tags && t.tags.includes(oldName)) {
-           const newTags = t.tags.map(tag => tag === oldName ? newName : tag);
-           return { ...t, tags: Array.from(new Set(newTags)) };
-        }
-        return t;
-     }));
-     // Rename in savedTags
-     setSavedTags(prev => prev.map(tag => tag === oldName ? newName : tag));
-  };
-
-  const handleDeleteTag = (tagName: string) => {
-     // Delete from transactions
-     setTransactions(prev => prev.map(t => {
-        if (t.tags && t.tags.includes(tagName)) {
-           return { ...t, tags: t.tags.filter(tag => tag !== tagName) };
-        }
-        return t;
-     }));
-     // Delete from savedTags
-     setSavedTags(prev => prev.filter(tag => tag !== tagName));
-  };
-
-  const handleAddTag = (tagName: string) => {
-     if (!savedTags.includes(tagName)) {
-        setSavedTags(prev => [...prev, tagName]);
-     }
-  };
-
-  const handleSplitTransaction = (originalId: string, newTransactions: Omit<Transaction, 'id'>[]) => {
-     setTransactions(prev => {
-        const filtered = prev.filter(t => t.id !== originalId);
-        const added = newTransactions.map(t => ({
-           ...t,
-           id: crypto.randomUUID(),
-           subcategoryId: ensureSubcategory(t.categoryId, t.subcategoryId)
-        }));
-        return [...added, ...filtered];
-     });
-  };
-
-  const executeLoadDemo = () => {
-    import('./utils/demoData').then(module => {
-       const demoTxs = module.generateDemoTransactions(categories);
-       setTransactions(demoTxs);
-       setActiveTab('analysis');
-    });
-  };
-
   const handleLoadDemoRequest = () => {
     if (transactions.length > 0) {
       setConfirmModal({
         isOpen: true,
         title: 'Załaduj dane demo',
         message: 'W historii istnieją już transakcje. Czy chcesz je USUNĄĆ i załadować przykładowe dane demo? Tej operacji nie można cofnąć.',
-        action: executeLoadDemo,
+        action: () => {
+           // We need to clear via action, then load. 
+           // Since loadDemoData overrides state, calling it directly is fine, but context method handles it nicely.
+           loadDemoData(); 
+           setActiveTab('analysis');
+        },
       });
     } else {
-      executeLoadDemo();
+      loadDemoData();
+      setActiveTab('analysis');
     }
   };
 
@@ -455,7 +75,6 @@ const App: React.FC = () => {
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between relative">
           <div className="flex items-center">
-            {/* Logo Component */}
             <Logo className="h-10 w-auto text-slate-900" />
           </div>
           
@@ -487,70 +106,7 @@ const App: React.FC = () => {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {activeTab === 'dashboard' && (
-          <div className="space-y-6 animate-fade-in">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard 
-                label="Dostępne środki" 
-                value={CURRENCY_FORMATTER.format(operationalBalance)} 
-                icon={<Wallet className="text-slate-900" size={24} />}
-                colorClass="text-slate-900"
-                isPrivateMode={isPrivateMode}
-              />
-              <StatCard 
-                label="Przychody" 
-                value={CURRENCY_FORMATTER.format(summary.totalIncome)} 
-                icon={<ArrowUpCircle className="text-green-600" size={24} />}
-                colorClass="text-green-600"
-                isPrivateMode={isPrivateMode}
-              />
-              <StatCard 
-                label="Wydatki" 
-                value={CURRENCY_FORMATTER.format(summary.totalExpense)} 
-                icon={<ArrowDownCircle className="text-red-600" size={24} />}
-                colorClass="text-red-600"
-                isPrivateMode={isPrivateMode}
-              />
-              <StatCard 
-                label="Oszczędności/Inwestycje" 
-                value={CURRENCY_FORMATTER.format(summary.savingsAmount)} 
-                icon={<PiggyBank className="text-emerald-600" size={24} />}
-                colorClass="text-emerald-600"
-                isPrivateMode={isPrivateMode}
-              />
-            </div>
-
-            {/* Main Content Stack */}
-            
-            {/* 1. Limits/Pulse - Full Width */}
-            <BudgetPulse transactions={transactions} categories={categories} isPrivateMode={isPrivateMode} />
-
-            {/* 2. New Transaction & Recent Transactions - Side by Side */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <TransactionForm 
-                onAdd={handleAddTransaction} 
-                categories={categories}
-                allTags={allTags}
-                onLoadDemo={handleLoadDemoRequest}
-              />
-              
-              <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col h-full">
-                <div className="flex justify-between items-center mb-4 shrink-0">
-                  <h3 className="font-semibold text-slate-800">Ostatnie transakcje</h3>
-                  <button onClick={() => setActiveTab('history')} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">Zobacz wszystkie</button>
-                </div>
-                <div className="flex-1 min-h-0">
-                  <TransactionList 
-                    transactions={transactions.slice(0, 5)} 
-                    categories={categories} 
-                    onDelete={handleDeleteTransaction}
-                    isPrivateMode={isPrivateMode}
-                    onLoadDemo={handleLoadDemoRequest}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          <DashboardView onSetActiveTab={setActiveTab} onLoadDemoRequest={handleLoadDemoRequest} />
         )}
 
         {activeTab === 'analysis' && (
@@ -562,11 +118,16 @@ const App: React.FC = () => {
              transactions={transactions} 
              categories={categories} 
              onEdit={setEditingTransaction} 
-             onDelete={handleDeleteTransaction}
-             onClearAll={handleClearHistory}
+             onDelete={deleteTransaction}
+             onClearAll={() => setConfirmModal({
+                isOpen: true,
+                title: 'Wyczyść całą historię',
+                message: 'Czy na pewno chcesz usunąć wszystkie transakcje? Tej operacji nie można cofnąć.',
+                action: clearTransactions
+             })}
              onOpenBulkAction={() => setIsBulkModalOpen(true)}
              onOpenBulkTagAction={() => setIsBulkTagModalOpen(true)}
-             onSplit={handleSplitTransaction}
+             onSplit={splitTransaction}
              isPrivateMode={isPrivateMode}
           />
         )}
@@ -575,13 +136,13 @@ const App: React.FC = () => {
           <SettingsView 
             categories={categories} 
             transactions={transactions}
-            onUpdateCategories={handleUpdateCategories}
-            onDeleteCategory={handleDeleteCategory}
-            onDeleteSubcategory={handleDeleteSubcategory}
+            onUpdateCategories={updateCategories}
+            onDeleteCategory={deleteCategory}
+            onDeleteSubcategory={deleteSubcategory}
             onOpenImport={() => setIsImportModalOpen(true)}
-            onRenameTag={handleRenameTag}
-            onDeleteTag={handleDeleteTag}
-            onAddTag={handleAddTag}
+            onRenameTag={renameTag}
+            onDeleteTag={deleteTag}
+            onAddTag={addTag}
             allTags={allTags}
           />
         )}
@@ -610,8 +171,8 @@ const App: React.FC = () => {
       <ImportModal 
         isOpen={isImportModalOpen} 
         onClose={() => setIsImportModalOpen(false)} 
-        onImport={handleImport}
-        onRestore={handleRestoreBackup}
+        onImport={importData}
+        onRestore={restoreBackup}
         hasExistingTransactions={transactions.length > 0}
         categories={categories}
       />
@@ -620,8 +181,8 @@ const App: React.FC = () => {
         isOpen={!!editingTransaction} 
         transaction={editingTransaction} 
         onClose={() => setEditingTransaction(null)} 
-        onSave={handleUpdateTransaction}
-        onDelete={handleDeleteTransaction}
+        onSave={updateTransaction}
+        onDelete={deleteTransaction}
         categories={categories}
         allTags={allTags}
       />
@@ -631,7 +192,7 @@ const App: React.FC = () => {
         onClose={() => setIsBulkModalOpen(false)}
         transactions={transactions}
         categories={categories}
-        onUpdate={handleBulkUpdate}
+        onUpdate={bulkUpdateCategory}
       />
 
       <BulkTagModal
@@ -640,7 +201,7 @@ const App: React.FC = () => {
         transactions={transactions}
         categories={categories}
         allTags={allTags}
-        onUpdate={handleBulkTagUpdate}
+        onUpdate={bulkUpdateTags}
       />
 
       <ConfirmModal 
@@ -651,6 +212,14 @@ const App: React.FC = () => {
         message={confirmModal.message} 
       />
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <FinanceProvider>
+      <AppContent />
+    </FinanceProvider>
   );
 };
 
