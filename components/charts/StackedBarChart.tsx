@@ -4,7 +4,7 @@ import { select, stack as d3Stack, scaleBand, scaleLinear, scaleOrdinal, axisLef
 import { useChartDimensions } from '../../hooks/useChartDimensions';
 import { ChartProps, formatValue } from './types';
 
-export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ data, keys, colors = [], height = 300, isPrivateMode }) => {
+export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ data, keys, colors = [], height = 300, isPrivateMode, isDarkMode }) => {
   const { ref, width } = useChartDimensions();
 
   useEffect(() => {
@@ -24,9 +24,26 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
     const y = scaleLinear().domain([0, max(stackedData, layer => max(layer, d => d[1])) || 0]).nice().range([chartHeight, 0]);
     const colorScale = scaleOrdinal().domain(keys).range(colors);
 
-    g.append("g").attr("class", "grid").call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
+    // Dark Mode colors
+    const gridColor = isDarkMode ? "#334155" : "#e2e8f0";
+    const textColor = isDarkMode ? "#94a3b8" : "#64748b";
+    const tooltipBg = isDarkMode ? "#1e293b" : "#fff";
+    const tooltipBorder = isDarkMode ? "#334155" : "#e2e8f0";
+    const tooltipText = isDarkMode ? "#f8fafc" : "#1e293b";
+
+    g.append("g")
+     .attr("class", "grid")
+     .call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
+     .selectAll("line")
+     .attr("stroke", gridColor)
+     .attr("stroke-dasharray", "3,3");
 
     const tooltip = select(ref.current).select(".tooltip");
+    
+    // Apply dark mode styles to tooltip container dynamically
+    tooltip.style("background-color", tooltipBg)
+           .style("border-color", tooltipBorder)
+           .style("color", tooltipText);
 
     g.selectAll("g.layer")
       .data(stackedData)
@@ -55,7 +72,7 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
                            <span>${seriesKey}:</span>
                            <span class="font-bold">${formatValue(val, isPrivateMode)}</span>
                         </div>
-                        <div class="text-xs text-slate-400 text-right">${pct}% całości</div>
+                        <div class="text-xs opacity-70 text-right">${pct}% całości</div>
                       `)
                       .style("left", `${event.clientX + 10}px`)
                       .style("top", `${event.clientY + 10}px`);
@@ -67,13 +84,17 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
     const interval = Math.ceil(data.length / maxLabels);
     const tickValues = data.map(d => String(d.name)).filter((_, i) => i % interval === 0);
 
-    g.append("g").attr("transform", `translate(0,${chartHeight})`)
-        .call(axisBottom(x).tickValues(tickValues).tickSize(0))
-        .select(".domain").remove();
+    const xAxis = g.append("g").attr("transform", `translate(0,${chartHeight})`)
+        .call(axisBottom(x).tickValues(tickValues).tickSize(0));
+    xAxis.select(".domain").remove();
+    xAxis.selectAll("text").attr("fill", textColor);
     
-    g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
+    const yAxis = g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`));
+    yAxis.select(".domain").remove();
+    yAxis.selectAll("text").attr("fill", textColor);
+    yAxis.selectAll("line").attr("stroke", gridColor); // Ticks
 
-  }, [data, width, height, keys, colors, isPrivateMode]);
+  }, [data, width, height, keys, colors, isPrivateMode, isDarkMode]);
 
   const colorScale = scaleOrdinal().domain(keys).range(colors);
 
@@ -85,7 +106,7 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
          {keys.map(k => (
             <div key={k} className="flex items-center gap-1.5">
                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorScale(k) as string }}></div>
-               <span className="text-[10px] text-slate-500 font-medium">{k}</span>
+               <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{k}</span>
             </div>
          ))}
       </div>

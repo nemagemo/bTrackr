@@ -4,7 +4,7 @@ import { select, scaleBand, scaleLinear, axisLeft, axisBottom, max } from 'd3';
 import { useChartDimensions } from '../../hooks/useChartDimensions';
 import { ChartProps, formatValue } from './types';
 
-export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPrivateMode }) => {
+export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPrivateMode, isDarkMode }) => {
   const { ref, width } = useChartDimensions();
 
   useEffect(() => {
@@ -17,6 +17,12 @@ export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPri
     const chartHeight = height - margin.top - margin.bottom;
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
+    const gridColor = isDarkMode ? "#334155" : "#e2e8f0";
+    const textColor = isDarkMode ? "#94a3b8" : "#64748b";
+    const tooltipBg = isDarkMode ? "#1e293b" : "#fff";
+    const tooltipBorder = isDarkMode ? "#334155" : "#e2e8f0";
+    const tooltipText = isDarkMode ? "#f8fafc" : "#1e293b";
+
     const x = scaleBand()
       .domain(data.map(d => String(d.day)))
       .range([0, chartWidth])
@@ -27,9 +33,12 @@ export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPri
       .nice()
       .range([chartHeight, 0]);
 
-    g.append("g").attr("class", "grid").call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
+    g.append("g").attr("class", "grid")
+     .call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
+     .selectAll("line").attr("stroke", gridColor).attr("stroke-dasharray", "3,3");
 
     const tooltip = select(ref.current).select(".tooltip");
+    tooltip.style("background-color", tooltipBg).style("border-color", tooltipBorder).style("color", tooltipText);
 
     g.selectAll(".bar")
       .data(data)
@@ -38,7 +47,7 @@ export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPri
       .attr("y", d => y(d.value))
       .attr("width", x.bandwidth())
       .attr("height", d => chartHeight - y(d.value))
-      .attr("fill", d => (d.isWeekend ? '#818cf8' : '#cbd5e1'))
+      .attr("fill", d => (d.isWeekend ? '#818cf8' : isDarkMode ? '#475569' : '#cbd5e1'))
       .attr("rx", 4)
       .on("mouseenter", (event, d) => {
          tooltip.style("opacity", 1)
@@ -49,10 +58,16 @@ export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPri
       .on("mousemove", (event) => tooltip.style("left", `${event.clientX + 10}px`).style("top", `${event.clientY + 10}px`))
       .on("mouseleave", () => tooltip.style("opacity", 0));
 
-    g.append("g").attr("transform", `translate(0,${chartHeight})`).call(axisBottom(x).tickSize(0)).select(".domain").remove();
-    g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
+    const xAxis = g.append("g").attr("transform", `translate(0,${chartHeight})`).call(axisBottom(x).tickSize(0));
+    xAxis.select(".domain").remove();
+    xAxis.selectAll("text").attr("fill", textColor);
+    
+    const yAxis = g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`));
+    yAxis.select(".domain").remove();
+    yAxis.selectAll("text").attr("fill", textColor);
+    yAxis.selectAll("line").attr("stroke", gridColor);
 
-  }, [data, width, height, isPrivateMode]);
+  }, [data, width, height, isPrivateMode, isDarkMode]);
 
   return (
     <div ref={ref} className="relative w-full">

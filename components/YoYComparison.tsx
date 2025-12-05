@@ -7,6 +7,7 @@ interface YoYComparisonProps {
   transactions: Transaction[];
   categories: CategoryItem[];
   isPrivateMode?: boolean;
+  isDarkMode?: boolean;
 }
 
 // Distinct palette for historical years (mix of warm/cool, clear contrast)
@@ -21,9 +22,9 @@ const HISTORY_COLORS = [
   '#84cc16', // Lime-500 (Fresh)
 ];
 
-const CURRENT_YEAR_COLOR = '#0f172a'; // Slate-900 (Bold Black/Blue) or Indigo '#4f46e5'
+const CURRENT_YEAR_COLOR = '#0f172a'; // Slate-900 (Bold Black/Blue)
 
-export const YoYComparison: React.FC<YoYComparisonProps> = ({ transactions, categories, isPrivateMode }) => {
+export const YoYComparison: React.FC<YoYComparisonProps> = ({ transactions, categories, isPrivateMode, isDarkMode }) => {
   const currentYear = new Date().getFullYear();
 
   const savingsCategoryIds = useMemo(() => {
@@ -80,10 +81,10 @@ export const YoYComparison: React.FC<YoYComparisonProps> = ({ transactions, cate
   const highlightStrokeWidth = chartData.keys.length < 4 ? 2.5 : 4;
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-full flex flex-col">
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 h-full flex flex-col transition-colors">
        <div className="mb-6">
-        <h3 className="font-semibold text-slate-800">Porównanie Rok do Roku</h3>
-        <p className="text-xs text-slate-400">Historia wydatków konsumpcyjnych (bez oszczędności)</p>
+        <h3 className="font-semibold text-slate-800 dark:text-white">Porównanie Rok do Roku</h3>
+        <p className="text-xs text-slate-400 dark:text-slate-500">Historia wydatków konsumpcyjnych (bez oszczędności)</p>
       </div>
       
       <div className="flex-1 min-h-[300px]">
@@ -93,6 +94,7 @@ export const YoYComparison: React.FC<YoYComparisonProps> = ({ transactions, cate
             colors={chartData.colors} 
             height={320}
             isPrivateMode={isPrivateMode}
+            isDarkMode={isDarkMode}
             highlightKey={currentYear.toString()}
             highlightStrokeWidth={highlightStrokeWidth}
          />

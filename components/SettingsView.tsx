@@ -50,7 +50,7 @@ const AddSubcategoryInput = ({ onAdd }: { onAdd: (name: string) => void }) => {
     return (
       <button 
         onClick={() => setIsEditing(true)}
-        className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1 py-1 px-2 rounded hover:bg-indigo-50 transition-colors w-fit"
+        className="text-xs text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 py-1 px-2 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors w-fit"
       >
         <Plus size={14} /> Dodaj podkategorię
       </button>
@@ -67,12 +67,12 @@ const AddSubcategoryInput = ({ onAdd }: { onAdd: (name: string) => void }) => {
           onKeyDown={handleKeyDown}
           placeholder="Nazwa..."
           autoFocus
-          className="w-full bg-white border border-indigo-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900 pr-6"
+          className="w-full bg-white dark:bg-slate-700 border border-indigo-300 dark:border-indigo-700 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white pr-6"
         />
         {value && (
           <button
             onClick={() => setValue('')}
-            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5"
           >
             <X size={12} />
           </button>
@@ -81,13 +81,13 @@ const AddSubcategoryInput = ({ onAdd }: { onAdd: (name: string) => void }) => {
       <button 
         onClick={handleSave} 
         disabled={!value.trim()}
-        className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
+        className="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded disabled:opacity-50"
       >
         <Check size={14} />
       </button>
       <button 
         onClick={handleCancel}
-        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+        className="p-1 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"
       >
         <X size={14} />
       </button>
@@ -267,7 +267,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     <div className="space-y-6 animate-fade-in">
       
       {/* Kopia Zapasowa i Dane Section */}
-      <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5 rounded-2xl shadow-sm text-white">
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-slate-700 dark:to-slate-800 p-5 rounded-2xl shadow-sm text-white">
         <div className="flex justify-between items-center gap-4 mb-4">
            <div>
              <h2 className="text-lg font-bold flex items-center gap-2">
@@ -314,15 +314,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <div className="flex flex-col gap-6">
         {/* Zarządzanie Kategoriami */}
-        <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 w-full">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Zarządzanie Kategoriami</h2>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] dark:shadow-none border border-slate-100 dark:border-slate-700 w-full transition-colors">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Zarządzanie Kategoriami</h2>
           
           {/* Tabs */}
-          <div className="flex bg-slate-100 p-1 rounded-lg w-full mb-6">
+          <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg w-full mb-6">
             <button
               onClick={() => setActiveTab(TransactionType.EXPENSE)}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                activeTab === TransactionType.EXPENSE ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'
+                activeTab === TransactionType.EXPENSE ? 'bg-white dark:bg-slate-600 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               Wydatki
@@ -330,7 +330,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <button
               onClick={() => setActiveTab(TransactionType.INCOME)}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                activeTab === TransactionType.INCOME ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'
+                activeTab === TransactionType.INCOME ? 'bg-white dark:bg-slate-600 text-green-600 dark:text-green-400 shadow-sm' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               Przychody
@@ -340,8 +340,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {/* List - Grid Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filteredCategories.map(cat => (
-              <div key={cat.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white h-fit">
-                <div className="p-3 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 transition-colors">
+              <div key={cat.id} className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-800 h-fit transition-colors">
+                <div className="p-3 flex items-center justify-between bg-slate-50/50 dark:bg-slate-700/30 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                   {editingCatId === cat.id ? (
                     <div className="flex items-center gap-2 flex-1">
                       <input 
@@ -355,25 +355,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           type="text" 
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none pr-6"
+                          className="w-full border border-slate-300 dark:border-slate-600 rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none pr-6"
                           autoFocus
                         />
                         {editName && (
                           <button
                             onClick={() => setEditName('')}
-                            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5"
                           >
                             <X size={12} />
                           </button>
                         )}
                       </div>
-                      <button onClick={handleSaveEdit} className="text-green-600 p-1"><Check size={18}/></button>
-                      <button onClick={() => setEditingCatId(null)} className="text-slate-400 p-1"><X size={18}/></button>
+                      <button onClick={handleSaveEdit} className="text-green-600 dark:text-green-400 p-1"><Check size={18}/></button>
+                      <button onClick={() => setEditingCatId(null)} className="text-slate-400 dark:text-slate-500 p-1"><X size={18}/></button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setExpandedCategory(expandedCategory === cat.id ? null : cat.id)}>
                       <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                      <span className="font-semibold text-slate-800 text-sm truncate max-w-[120px] sm:max-w-none">{cat.name}</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm truncate max-w-[120px] sm:max-w-none">{cat.name}</span>
                       <span className="text-xs text-slate-400">({cat.subcategories.length})</span>
                       {expandedCategory === cat.id ? <ChevronDown size={14} className="text-slate-400"/> : <ChevronRight size={14} className="text-slate-400"/>}
                     </div>
@@ -382,20 +382,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   {/* Edit Budget Limit (Only for Expense) */}
                   {activeTab === TransactionType.EXPENSE && !editingCatId && (
                     <div className="flex items-center mr-2 relative group/limit shrink-0">
-                        <Target size={14} className={`mr-1 ${cat.budgetLimit && cat.budgetLimit > 0 ? 'text-indigo-500' : 'text-slate-300'}`} />
+                        <Target size={14} className={`mr-1 ${cat.budgetLimit && cat.budgetLimit > 0 ? 'text-indigo-500' : 'text-slate-300 dark:text-slate-600'}`} />
                         <div className="relative w-14">
                           <input 
                             type="number"
                             placeholder="Limit"
                             value={cat.budgetLimit && cat.budgetLimit > 0 ? cat.budgetLimit : ''}
                             onChange={(e) => handleUpdateBudgetLimit(cat.id, e.target.value)}
-                            className="w-full border-b border-slate-200 focus:border-indigo-500 bg-transparent text-xs text-right focus:outline-none text-slate-700 placeholder-slate-300 pr-3"
+                            className="w-full border-b border-slate-200 dark:border-slate-600 focus:border-indigo-500 bg-transparent text-xs text-right focus:outline-none text-slate-700 dark:text-slate-300 placeholder-slate-300 dark:placeholder-slate-600 pr-3"
                             onClick={(e) => e.stopPropagation()}
                           />
                           {(cat.budgetLimit && cat.budgetLimit > 0) && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleUpdateBudgetLimit(cat.id, ''); }}
-                              className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                              className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400"
                             >
                               <X size={10} />
                             </button>
@@ -406,12 +406,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                   <div className="flex items-center gap-1 shrink-0">
                     {!editingCatId && (
-                      <button onClick={() => handleStartEdit(cat)} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded">
+                      <button onClick={() => handleStartEdit(cat)} className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded">
                         <Edit2 size={14} />
                       </button>
                     )}
                     {!editingCatId && (
-                      <button onClick={() => requestDeleteCategory(cat)} className="p-1.5 text-slate-400 hover:text-red-600 rounded">
+                      <button onClick={() => requestDeleteCategory(cat)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded">
                         <Trash2 size={14} />
                       </button>
                     )}
@@ -420,34 +420,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 
                 {/* Savings Toggle for Expenses */}
                 {activeTab === TransactionType.EXPENSE && (
-                  <div className="px-3 py-2 bg-white border-t border-slate-100 flex items-center gap-2">
+                  <div className="px-3 py-2 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 flex items-center gap-2">
                       <input 
                         type="checkbox" 
                         checked={!!cat.isIncludedInSavings}
                         onChange={() => handleToggleSavingsInclusion(cat.id)}
-                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer bg-white accent-emerald-600"
+                        className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer bg-white dark:bg-slate-700 accent-emerald-600"
                         style={{ colorScheme: 'light' }}
                       />
-                      <span className="text-xs text-slate-500">Wliczaj do stopy oszczędności</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Wliczaj do stopy oszczędności</span>
                   </div>
                 )}
 
                 {/* Subcategories */}
                 {expandedCategory === cat.id && (
-                  <div className="bg-slate-50 p-3 border-t border-slate-100 space-y-2">
-                    <div className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex justify-between px-2">
+                  <div className="bg-slate-50 dark:bg-slate-900/50 p-3 border-t border-slate-100 dark:border-slate-700 space-y-2">
+                    <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-2 flex justify-between px-2">
                       <span>Nazwa</span>
                       <div className="flex gap-2">
                           <span>Usuń</span>
                       </div>
                     </div>
                     {cat.subcategories.map(sub => (
-                      <div key={sub.id} className="flex items-center justify-between text-sm pl-4 pr-2 group hover:bg-slate-100 rounded py-1">
-                        <span className="text-slate-600">{sub.name}</span>
+                      <div key={sub.id} className="flex items-center justify-between text-sm pl-4 pr-2 group hover:bg-slate-100 dark:hover:bg-slate-800 rounded py-1 transition-colors">
+                        <span className="text-slate-600 dark:text-slate-300">{sub.name}</span>
                         <div className="flex items-center gap-1">
                           <button 
                               onClick={() => requestDeleteSubcategory(cat.id, sub.id)}
-                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                           >
                               <Trash2 size={14} />
                           </button>
@@ -465,7 +465,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* Add New Category Button */}
             {isAddingCat ? (
-              <div className="border border-indigo-200 rounded-xl p-3 bg-indigo-50 flex items-center gap-2 h-[58px]">
+              <div className="border border-indigo-200 dark:border-indigo-800 rounded-xl p-3 bg-indigo-50 dark:bg-indigo-900/20 flex items-center gap-2 h-[58px]">
                 <input 
                   type="color" 
                   value={newCatColor}
@@ -478,25 +478,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     value={newCatName}
                     onChange={(e) => setNewCatName(e.target.value)}
                     placeholder="Nazwa kategorii"
-                    className="w-full border border-indigo-200 rounded px-2 py-1 text-sm focus:outline-none bg-white text-slate-900 pr-6"
+                    className="w-full border border-indigo-200 dark:border-indigo-700 rounded px-2 py-1 text-sm focus:outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white pr-6"
                     autoFocus
                   />
                   {newCatName && (
                     <button
                       onClick={() => setNewCatName('')}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5"
                     >
                       <X size={12} />
                     </button>
                   )}
                 </div>
-                <button onClick={handleAddCategory} className="text-indigo-600 p-1 bg-white rounded shadow-sm hover:bg-indigo-100"><Check size={16}/></button>
-                <button onClick={() => setIsAddingCat(false)} className="text-slate-400 p-1 hover:text-slate-600"><X size={16}/></button>
+                <button onClick={handleAddCategory} className="text-indigo-600 dark:text-indigo-400 p-1 bg-white dark:bg-slate-800 rounded shadow-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/50"><Check size={16}/></button>
+                <button onClick={() => setIsAddingCat(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1"><X size={16}/></button>
               </div>
             ) : (
               <button 
                 onClick={() => setIsAddingCat(true)}
-                className="border-2 border-dashed border-slate-200 rounded-xl p-3 flex items-center justify-center text-slate-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all font-medium text-sm gap-2 h-[58px] w-full"
+                className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-3 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all font-medium text-sm gap-2 h-[58px] w-full"
               >
                 <Plus size={16} /> Dodaj nową kategorię
               </button>
@@ -505,14 +505,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Zarządzanie Tagami */}
-        <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 w-full">
-           <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] dark:shadow-none border border-slate-100 dark:border-slate-700 w-full transition-colors">
+           <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
               Zarządzanie Tagami <span className="text-sm font-normal text-slate-400">({allTags.length})</span>
            </h2>
            
            {allTags.length === 0 && !isAddingTag ? (
-              <div className="flex flex-col items-center justify-center h-[200px] text-slate-400 border-2 border-dashed border-slate-100 rounded-xl mb-4">
-                 <div className="bg-slate-100 p-3 rounded-full mb-3">
+              <div className="flex flex-col items-center justify-center h-[200px] text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-100 dark:border-slate-700 rounded-xl mb-4">
+                 <div className="bg-slate-100 dark:bg-slate-700 p-3 rounded-full mb-3">
                     <Tag size={24} className="opacity-40" />
                  </div>
                  <p className="text-sm">Brak zdefiniowanych tagów.</p>
@@ -520,7 +520,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
            ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                  {allTags.map(tag => (
-                    <div key={tag} className="flex items-center justify-between p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors group bg-white">
+                    <div key={tag} className="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group bg-white dark:bg-slate-800">
                        {editingTag === tag ? (
                            <div className="flex items-center gap-2 flex-1">
                               <span className="text-slate-400">#</span>
@@ -529,31 +529,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                    type="text" 
                                    value={tagEditValue} 
                                    onChange={(e) => setTagEditValue(e.target.value)}
-                                   className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none pr-6"
+                                   className="w-full border border-slate-300 dark:border-slate-600 rounded px-2 py-1 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none pr-6"
                                    autoFocus
                                 />
                                 {tagEditValue && (
                                   <button
                                     onClick={() => setTagEditValue('')}
-                                    className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5"
                                   >
                                     <X size={12} />
                                   </button>
                                 )}
                               </div>
-                              <button onClick={handleSaveTag} className="text-green-600 p-1 bg-green-50 rounded hover:bg-green-100"><Check size={16}/></button>
-                              <button onClick={() => setEditingTag(null)} className="text-slate-400 p-1 hover:bg-slate-100 rounded"><X size={16}/></button>
+                              <button onClick={handleSaveTag} className="text-green-600 dark:text-green-400 p-1 bg-green-50 dark:bg-green-900/30 rounded hover:bg-green-100 dark:hover:bg-green-900/50"><Check size={16}/></button>
+                              <button onClick={() => setEditingTag(null)} className="text-slate-400 p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"><X size={16}/></button>
                            </div>
                        ) : (
                            <>
                               <div className="flex items-center gap-2 truncate">
-                                 <span className="bg-pink-50 text-pink-600 px-2 py-0.5 rounded text-sm font-medium truncate">#{tag}</span>
+                                 <span className="bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 px-2 py-0.5 rounded text-sm font-medium truncate">#{tag}</span>
                               </div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                 <button onClick={() => handleStartEditTag(tag)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="Zmień nazwę">
+                                 <button onClick={() => handleStartEditTag(tag)} className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded" title="Zmień nazwę">
                                     <Edit2 size={14} />
                                  </button>
-                                 <button onClick={() => handleDeleteTagConfirm(tag)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded" title="Usuń tag">
+                                 <button onClick={() => handleDeleteTagConfirm(tag)} className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Usuń tag">
                                     <Trash2 size={14} />
                                  </button>
                               </div>
@@ -566,8 +566,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
            {/* Add New Tag Button */}
            {isAddingTag ? (
-              <div className="border border-pink-200 rounded-xl p-3 bg-pink-50 flex items-center gap-2 h-[58px]">
-                <div className="bg-white p-1.5 rounded-lg text-pink-500">
+              <div className="border border-pink-200 dark:border-pink-800 rounded-xl p-3 bg-pink-50 dark:bg-pink-900/20 flex items-center gap-2 h-[58px]">
+                <div className="bg-white dark:bg-slate-800 p-1.5 rounded-lg text-pink-500 dark:text-pink-400">
                    <Hash size={16} />
                 </div>
                 <div className="relative flex-1">
@@ -576,7 +576,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     value={newTagName}
                     onChange={(e) => setNewTagName(e.target.value)}
                     placeholder="Nowy tag (np. wakacje)"
-                    className="w-full border border-pink-200 rounded px-2 py-1 text-sm focus:outline-none bg-white text-slate-900 pr-6"
+                    className="w-full border border-pink-200 dark:border-pink-800 rounded px-2 py-1 text-sm focus:outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white pr-6"
                     autoFocus
                     onKeyDown={(e) => {
                        if(e.key === 'Enter') handleAddTag();
@@ -586,19 +586,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   {newTagName && (
                     <button
                       onClick={() => setNewTagName('')}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5"
                     >
                       <X size={12} />
                     </button>
                   )}
                 </div>
-                <button onClick={handleAddTag} className="text-pink-600 p-1 bg-white rounded shadow-sm hover:bg-pink-100"><Check size={16}/></button>
-                <button onClick={() => setIsAddingTag(false)} className="text-slate-400 p-1 hover:text-slate-600"><X size={16}/></button>
+                <button onClick={handleAddTag} className="text-pink-600 dark:text-pink-400 p-1 bg-white dark:bg-slate-800 rounded shadow-sm hover:bg-pink-100 dark:hover:bg-pink-900/50"><Check size={16}/></button>
+                <button onClick={() => setIsAddingTag(false)} className="text-slate-400 p-1 hover:text-slate-600 dark:hover:text-slate-300"><X size={16}/></button>
               </div>
             ) : (
               <button 
                 onClick={() => setIsAddingTag(true)}
-                className="border-2 border-dashed border-slate-200 rounded-xl p-3 flex items-center justify-center text-slate-400 hover:border-pink-300 hover:text-pink-600 hover:bg-pink-50 transition-all font-medium text-sm gap-2 h-[58px] w-full"
+                className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-3 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:border-pink-300 hover:text-pink-600 dark:hover:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all font-medium text-sm gap-2 h-[58px] w-full"
               >
                 <Plus size={16} /> Dodaj nowy tag
               </button>

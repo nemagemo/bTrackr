@@ -9,6 +9,7 @@ export interface ChartProps {
   isPrivateMode?: boolean;
   showSurplusLine?: boolean;
   showSavingsRateLine?: boolean;
+  isDarkMode?: boolean; // New prop
 }
 
 export const formatValue = (val: number, isPrivate?: boolean): string => {

@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pl">
   <head>
@@ -8,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
+        darkMode: 'class', // Enable class-based dark mode
         theme: {
           extend: {
             fontFamily: {
@@ -15,8 +17,10 @@
             },
             colors: {
               slate: {
+                750: '#2d3748',
                 850: '#1e293b',
                 900: '#0f172a',
+                950: '#020617',
               }
             }
           },
@@ -25,11 +29,10 @@
     </script>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: light dark;
       }
       body {
-        background-color: #f8fafc;
-        color: #1e293b;
+        @apply bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-300;
       }
       ::-webkit-scrollbar {
         width: 6px;
@@ -43,6 +46,12 @@
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #475569;
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
       }
     </style>
 <script type="importmap">

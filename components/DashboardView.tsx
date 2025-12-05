@@ -73,10 +73,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onSetActiveTab, on
           onLoadDemo={onLoadDemoRequest}
         />
         
-        <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col h-full">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] dark:shadow-none border border-slate-100 dark:border-slate-700 flex flex-col h-full transition-colors">
           <div className="flex justify-between items-center mb-4 shrink-0">
-            <h3 className="font-semibold text-slate-800">Ostatnie transakcje</h3>
-            <button onClick={() => onSetActiveTab('history')} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">Zobacz wszystkie</button>
+            <h3 className="font-semibold text-slate-800 dark:text-white">Ostatnie transakcje</h3>
+            <button onClick={() => onSetActiveTab('history')} className="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium">Zobacz wszystkie</button>
           </div>
           <div className="flex-1 min-h-0">
             <TransactionList 

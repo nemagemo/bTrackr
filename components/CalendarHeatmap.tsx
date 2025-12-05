@@ -12,9 +12,10 @@ interface YearlyHeatmapProps {
   width: number;
   customTitle?: string;
   isPrivateMode?: boolean;
+  isDarkMode?: boolean;
 }
 
-const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, customTitle, isPrivateMode }) => {
+const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, customTitle, isPrivateMode, isDarkMode }) => {
   const containerRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
@@ -61,11 +62,25 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
     
     const colorScale = scaleThreshold<number, string>()
       .domain([1, maxVal * 0.25, maxVal * 0.5, maxVal * 0.75])
-      .range(['#f1f5f9', '#c7d2fe', '#818cf8', '#6366f1', '#312e81']); // Slate-100 to Indigo-900
+      .range(isDarkMode 
+        ? ['#1e293b', '#312e81', '#4338ca', '#6366f1', '#818cf8'] // Dark mode range (darker blue base -> light indigo)
+        : ['#f1f5f9', '#c7d2fe', '#818cf8', '#6366f1', '#312e81']  // Light mode range
+      );
+
+    // Dark Mode Colors
+    const emptyDayColor = isDarkMode ? '#1e293b' : '#f8fafc'; // Slate-800 vs Slate-50
+    const emptyDayStroke = isDarkMode ? '#334155' : '#e2e8f0'; // Slate-700 vs Slate-200
+    const textColor = isDarkMode ? "#94a3b8" : "#64748b";
+    
+    const tooltipBg = isDarkMode ? "#1e293b" : "#fff";
+    const tooltipBorder = isDarkMode ? "#334155" : "#e2e8f0";
+    const tooltipText = isDarkMode ? "#f8fafc" : "#1e293b";
 
     // --- DRAW DAYS ---
     const days = timeDays(startDate, new Date(year + 1, 0, 1));
     const tooltip = select(tooltipRef.current);
+    
+    tooltip.style("background-color", tooltipBg).style("border-color", tooltipBorder).style("color", tooltipText);
 
     g.selectAll(".day")
       .data(days)
@@ -88,10 +103,12 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
         const date = d as Date;
         const dateStr = date.toISOString().split('T')[0];
         const val = data.get(dateStr);
-        return (typeof val === 'number') ? colorScale(val) : '#f8fafc'; // empty day color
+        // Special case: if val exists (even 0, though map usually has >0), use scale.
+        // If not in map, use empty color.
+        return (typeof val === 'number') ? colorScale(val) : emptyDayColor; 
       })
       .attr("rx", Math.max(1, cellSize / 5)) // Dynamic radius
-      .attr("stroke", "#e2e8f0") // border for empty days
+      .attr("stroke", emptyDayStroke) // border for empty days
       .attr("stroke-width", (d: any) => {
          const date = d as Date;
          const dateStr = date.toISOString().split('T')[0];
@@ -113,13 +130,13 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
         tooltip.style("opacity", 1)
                .style("display", "block")
                .html(`
-                 <div class="font-bold text-slate-700">${date.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })}</div>
-                 <div class="text-indigo-600 font-semibold">${valDisplay}</div>
+                 <div class="font-bold">${date.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })}</div>
+                 <div class="font-semibold text-indigo-500">${valDisplay}</div>
                `)
                .style("left", `${event.clientX + 10}px`)
                .style("top", `${event.clientY + 10}px`);
         
-        select(event.currentTarget).attr("stroke", "#1e293b").attr("stroke-width", 2);
+        select(event.currentTarget).attr("stroke", isDarkMode ? "#94a3b8" : "#1e293b").attr("stroke-width", 2);
       })
       .on("mousemove", (event) => {
          tooltip.style("left", `${event.clientX + 10}px`)
@@ -130,7 +147,7 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
          select(event.currentTarget).attr("stroke", (d: any) => {
             const date = d as Date;
             const dateStr = date.toISOString().split('T')[0];
-            return data.has(dateStr) ? null : "#e2e8f0";
+            return data.has(dateStr) ? null : emptyDayStroke;
          }).attr("stroke-width", (d: any) => {
             const date = d as Date;
             const dateStr = date.toISOString().split('T')[0];
@@ -151,7 +168,7 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
       })
       .attr("y", 10)
       .attr("font-size", `${Math.max(9, cellSize)}px`) // Scale font slightly
-      .attr("fill", "#64748b")
+      .attr("fill", textColor)
       .attr("font-weight", "500");
 
     // Day labels (Mon, Wed, Fri)
@@ -164,13 +181,13 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
       .attr("y", (d, i) => monthLabelHeight + i * (cellSize + cellGap) + cellSize/1.5)
       .attr("text-anchor", "end")
       .attr("font-size", `${Math.max(8, cellSize - 2)}px`)
-      .attr("fill", "#94a3b8");
+      .attr("fill", isDarkMode ? "#64748b" : "#94a3b8");
 
-  }, [data, width, year, isPrivateMode]);
+  }, [data, width, year, isPrivateMode, isDarkMode]);
 
   return (
      <div className="mb-8">
-        <h4 className="text-sm font-bold text-slate-700 mb-2 border-l-4 border-indigo-500 pl-2">
+        <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 border-l-4 border-indigo-500 pl-2">
            {customTitle || year}
         </h4>
         <div className="w-full overflow-x-auto pb-2 custom-scrollbar">
@@ -191,9 +208,10 @@ interface CalendarHeatmapProps {
   year: number;
   periodType: PeriodType;
   isPrivateMode?: boolean;
+  isDarkMode?: boolean;
 }
 
-export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, categories, year, periodType, isPrivateMode }) => {
+export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, categories, year, periodType, isPrivateMode, isDarkMode }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [isSplitYears, setIsSplitYears] = useState(true);
@@ -305,18 +323,18 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
   if (availableYears.length === 0 && selectedCategoryId === 'ALL') return null;
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
         <div>
-          <h3 className="font-semibold text-slate-800">Kalendarz Wydatków</h3>
-          <p className="text-xs text-slate-400">Intensywność wydatków w poszczególnych dniach (bez oszczędności)</p>
+          <h3 className="font-semibold text-slate-800 dark:text-white">Kalendarz Wydatków</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Intensywność wydatków w poszczególnych dniach (bez oszczędności)</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
             <select
                value={selectedCategoryId}
                onChange={(e) => setSelectedCategoryId(e.target.value)}
-               className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 min-w-[160px]"
+               className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white min-w-[160px] transition-colors"
             >
                <option value="ALL">Wszystkie kategorie</option>
                {activeCategories.map(c => (
@@ -326,17 +344,17 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
 
             {/* Toggle Button - Only visible for ALL history */}
             {periodType === 'ALL' && (
-            <div className="flex bg-slate-50 p-1 rounded-lg">
+            <div className="flex bg-slate-50 dark:bg-slate-700 p-1 rounded-lg transition-colors">
                 <button
                     onClick={() => setIsSplitYears(true)}
-                    className={`p-2 rounded-md transition-all flex items-center gap-2 text-xs font-medium ${isSplitYears ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`p-2 rounded-md transition-all flex items-center gap-2 text-xs font-medium ${isSplitYears ? 'bg-white dark:bg-slate-600 shadow-sm text-indigo-600 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
                     title="Rozdziel lata"
                 >
                     <Layers size={16} /> <span className="hidden sm:inline">Rozdziel</span>
                 </button>
                 <button
                     onClick={() => setIsSplitYears(false)}
-                    className={`p-2 rounded-md transition-all flex items-center gap-2 text-xs font-medium ${!isSplitYears ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`p-2 rounded-md transition-all flex items-center gap-2 text-xs font-medium ${!isSplitYears ? 'bg-white dark:bg-slate-600 shadow-sm text-indigo-600 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
                     title="Sumuj lata"
                 >
                     <Combine size={16} /> <span className="hidden sm:inline">Sumuj</span>
@@ -357,6 +375,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                       width={width}
                       customTitle="Wszystkie lata (Suma)"
                       isPrivateMode={isPrivateMode}
+                      isDarkMode={isDarkMode}
                    />
                ) : (
                    // SPLIT VIEW
@@ -369,6 +388,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                                  data={dataByYear.get(y) || new Map<string, number>()} 
                                  width={width} 
                                  isPrivateMode={isPrivateMode}
+                                 isDarkMode={isDarkMode}
                               />
                            ))}
                            
@@ -376,7 +396,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                               <div className="flex justify-center mt-4 mb-4">
                                   <button 
                                       onClick={() => setShowAllYears(!showAllYears)}
-                                      className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-600 text-xs font-medium rounded-full hover:bg-slate-100 transition-colors border border-slate-200"
+                                      className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium rounded-full hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors border border-slate-200 dark:border-slate-600"
                                   >
                                       {showAllYears ? (
                                           <>
@@ -392,7 +412,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                            )}
                        </>
                    ) : (
-                       <div className="text-center py-8 text-slate-400 text-sm">Brak wydatków dla wybranej kategorii.</div>
+                       <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-sm">Brak wydatków dla wybranej kategorii.</div>
                    )
                )}
             </>
@@ -400,14 +420,26 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
       </div>
       
       {/* Shared Legend */}
-      <div className="flex justify-end items-center gap-2 mt-2 text-xs text-slate-400">
+      <div className="flex justify-end items-center gap-2 mt-2 text-xs text-slate-400 dark:text-slate-500">
         <span>Mniej</span>
         <div className="flex gap-1">
-           <div className="w-3 h-3 rounded bg-[#f1f5f9] border border-slate-200"></div>
-           <div className="w-3 h-3 rounded bg-[#c7d2fe]"></div>
-           <div className="w-3 h-3 rounded bg-[#818cf8]"></div>
-           <div className="w-3 h-3 rounded bg-[#6366f1]"></div>
-           <div className="w-3 h-3 rounded bg-[#312e81]"></div>
+           {isDarkMode ? (
+               <>
+                   <div className="w-3 h-3 rounded bg-[#1e293b] border border-slate-700"></div>
+                   <div className="w-3 h-3 rounded bg-[#312e81]"></div>
+                   <div className="w-3 h-3 rounded bg-[#4338ca]"></div>
+                   <div className="w-3 h-3 rounded bg-[#6366f1]"></div>
+                   <div className="w-3 h-3 rounded bg-[#818cf8]"></div>
+               </>
+           ) : (
+               <>
+                   <div className="w-3 h-3 rounded bg-[#f1f5f9] border border-slate-200"></div>
+                   <div className="w-3 h-3 rounded bg-[#c7d2fe]"></div>
+                   <div className="w-3 h-3 rounded bg-[#818cf8]"></div>
+                   <div className="w-3 h-3 rounded bg-[#6366f1]"></div>
+                   <div className="w-3 h-3 rounded bg-[#312e81]"></div>
+               </>
+           )}
         </div>
         <span>Więcej</span>
       </div>

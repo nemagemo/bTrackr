@@ -134,32 +134,32 @@ export const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden transition-colors">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800">
           <div>
-             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+             <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 Rozdziel transakcję
              </h2>
-             <p className="text-xs text-slate-500 mt-1">
-                Oryginał: <span className="font-medium text-slate-900">{originalTransaction.description}</span> na kwotę <span className="font-bold text-indigo-600">{CURRENCY_FORMATTER.format(totalOriginal)}</span>
+             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Oryginał: <span className="font-medium text-slate-900 dark:text-slate-200">{originalTransaction.description}</span> na kwotę <span className="font-bold text-indigo-600 dark:text-indigo-400">{CURRENCY_FORMATTER.format(totalOriginal)}</span>
              </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
             <X size={24} />
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-3">
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
            {splits.map((split, index) => {
              const activeCategory = categories.find(c => c.id === split.categoryId);
              const availableCategories = categories.filter(c => c.type === originalTransaction.type);
 
              return (
-               <div key={split.localId} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center animate-fade-in">
-                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-xs font-bold text-slate-500 shrink-0">
+               <div key={split.localId} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center animate-fade-in transition-colors">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
                     {index + 1}
                   </div>
                   
@@ -172,13 +172,13 @@ export const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
                            type="text" 
                            value={split.description}
                            onChange={(e) => updateSplit(split.localId, 'description', e.target.value)}
-                           className="w-full text-sm border-slate-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 pr-6"
+                           className="w-full text-sm border-slate-200 dark:border-slate-600 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 pr-6 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                            placeholder="Opis"
                         />
                         {split.description && (
                           <button
                             onClick={() => updateSplit(split.localId, 'description', '')}
-                            className="absolute right-1 top-1/2 -translate-y-1/2 md:translate-y-0 text-slate-400 hover:text-slate-600 p-0.5"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 md:translate-y-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5"
                             style={{ top: '50%' }}
                           >
                             <X size={12} />
@@ -192,7 +192,7 @@ export const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
                         <select
                            value={split.categoryId}
                            onChange={(e) => updateSplit(split.localId, 'categoryId', e.target.value)}
-                           className="w-full text-sm border-slate-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 bg-white"
+                           className="w-full text-sm border-slate-200 dark:border-slate-600 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                         >
                            {availableCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
@@ -204,7 +204,7 @@ export const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
                          <select
                            value={split.subcategoryId}
                            onChange={(e) => updateSplit(split.localId, 'subcategoryId', e.target.value)}
-                           className="w-full text-sm border-slate-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 bg-white"
+                           className="w-full text-sm border-slate-200 dark:border-slate-600 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                            disabled={!activeCategory || activeCategory.subcategories.length === 0}
                         >
                            <option value="">-- Podkategoria --</option>
@@ -220,7 +220,7 @@ export const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
                            step="0.01"
                            value={split.amount}
                            onChange={(e) => updateSplit(split.localId, 'amount', e.target.value)}
-                           className="w-full text-sm font-semibold text-right border-slate-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500"
+                           className="w-full text-sm font-semibold text-right border-slate-200 dark:border-slate-600 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                            placeholder="0.00"
                         />
                         <button 
@@ -237,7 +237,7 @@ export const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
                   {splits.length > 2 && (
                     <button 
                       onClick={() => handleRemoveSplit(split.localId)}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors shrink-0"
                     >
                        <Trash2 size={16} />
                     </button>
@@ -248,21 +248,21 @@ export const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
 
            <button 
              onClick={handleAddSplit}
-             className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all font-medium text-sm flex items-center justify-center gap-2"
+             className="w-full py-2 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 dark:text-slate-400 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all font-medium text-sm flex items-center justify-center gap-2"
            >
              <Plus size={16} /> Dodaj kolejny podział
            </button>
         </div>
 
         {/* Footer with Calculation Logic */}
-        <div className="bg-white border-t border-slate-100 p-4">
+        <div className="bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 p-4">
            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-4">
               <div className="flex-1 w-full">
                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-slate-500">Suma wprowadzona</span>
-                    <span className="font-medium text-slate-900">{CURRENCY_FORMATTER.format(currentSum)}</span>
+                    <span className="text-slate-500 dark:text-slate-400">Suma wprowadzona</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-200">{CURRENCY_FORMATTER.format(currentSum)}</span>
                  </div>
-                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                 <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div 
                        className={`h-full transition-all duration-300 ${currentSum > totalOriginal ? 'bg-red-500' : 'bg-indigo-500'}`}
                        style={{ width: `${Math.min(100, (currentSum / totalOriginal) * 100)}%` }}
@@ -272,8 +272,8 @@ export const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({
 
               <div className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 border w-full sm:w-auto justify-center ${
                  isBalanced 
-                 ? 'bg-green-50 text-green-700 border-green-200' 
-                 : 'bg-red-50 text-red-700 border-red-200'
+                 ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800' 
+                 : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
               }`}>
                  {isBalanced ? (
                     <>

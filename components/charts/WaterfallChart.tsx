@@ -4,7 +4,7 @@ import { select, scaleBand, scaleLinear, axisLeft, axisBottom, max, min } from '
 import { useChartDimensions } from '../../hooks/useChartDimensions';
 import { ChartProps, formatValue } from './types';
 
-export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPrivateMode }) => {
+export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPrivateMode, isDarkMode }) => {
   const { ref, width } = useChartDimensions();
 
   useEffect(() => {
@@ -17,11 +17,13 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
     const chartHeight = height - margin.top - margin.bottom;
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
+    const gridColor = isDarkMode ? "#334155" : "#e2e8f0";
+    const textColor = isDarkMode ? "#94a3b8" : "#64748b";
+    const tooltipBg = isDarkMode ? "#1e293b" : "#fff";
+    const tooltipBorder = isDarkMode ? "#334155" : "#e2e8f0";
+    const tooltipText = isDarkMode ? "#f8fafc" : "#1e293b";
+
     // --- WATERFALL CALCULATION LOGIC ---
-    // Waterfall chart requires calculating 'start' and 'end' positions for each bar relative to a cumulative total.
-    // 1. Income starts at previous cumulative and adds to it.
-    // 2. Expense/Savings starts at previous cumulative and subtracts from it (goes down).
-    // 3. Balance resets the start to 0 to show the final result.
     let cumulative = 0;
     const processedData = data.map((d, i) => {
         const start = cumulative;
@@ -56,9 +58,12 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
       .nice()
       .range([chartHeight, 0]);
 
-    g.append("g").attr("class", "grid").call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
+    g.append("g").attr("class", "grid")
+     .call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
+     .selectAll("line").attr("stroke", gridColor).attr("stroke-dasharray", "3,3");
 
     const tooltip = select(ref.current).select(".tooltip");
+    tooltip.style("background-color", tooltipBg).style("border-color", tooltipBorder).style("color", tooltipText);
 
     g.selectAll(".bar")
       .data(processedData)
@@ -97,20 +102,26 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
        .attr("y", d => y(Math.max(d.start, d.end)) - 5)
        .attr("text-anchor", "middle")
        .attr("font-size", "10px")
-       .attr("fill", "#64748b");
+       .attr("fill", textColor);
 
-    g.append("g").attr("transform", `translate(0,${chartHeight})`)
-        .call(axisBottom(x).tickSize(0))
-        .selectAll("text")
+    const xAxis = g.append("g").attr("transform", `translate(0,${chartHeight})`)
+        .call(axisBottom(x).tickSize(0));
+        
+    xAxis.selectAll("text")
         .attr("transform", "rotate(-45)")
         .style("text-anchor", "end")
         .attr("dx", "-.8em")
-        .attr("dy", ".15em");
+        .attr("dy", ".15em")
+        .attr("fill", textColor);
         
-    g.selectAll(".domain").remove();
-    g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
+    xAxis.select(".domain").remove();
+    
+    const yAxis = g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`));
+    yAxis.select(".domain").remove();
+    yAxis.selectAll("text").attr("fill", textColor);
+    yAxis.selectAll("line").attr("stroke", gridColor);
 
-  }, [data, width, height, isPrivateMode]);
+  }, [data, width, height, isPrivateMode, isDarkMode]);
 
   return (
     <div ref={ref} className="relative w-full">

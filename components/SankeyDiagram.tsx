@@ -5,6 +5,7 @@ import { sankey as d3Sankey, sankeyLinkHorizontal, sankeyLeft, sankeyJustify } f
 import { ArrowLeft, Layers, Grid } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
+import { useFinance } from '../context/FinanceContext';
 
 interface SankeyDiagramProps {
   transactions: Transaction[];
@@ -14,11 +15,10 @@ interface SankeyDiagramProps {
 
 /**
  * Diagram Sankeya wizualizujący przepływy finansowe.
- * Obsługuje dwa tryby:
- * 1. Overview: Przychody -> Budżet -> Kategorie/Nadwyżka/Deficyt.
- * 2. Drill-down: Wybrana kategoria -> Podkategorie.
  */
 export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, categories, isPrivateMode }) => {
+  const { theme } = useFinance();
+  const isDarkMode = theme === 'dark';
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 650 }); // Fixed height enforced
   const [drillDownCategoryId, setDrillDownCategoryId] = useState<string | null>(null);
@@ -44,7 +44,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
 
   /**
    * Główna logika przygotowania danych dla D3.
-   * Definiuje węzły (Nodes) i powiązania (Links).
    */
   const { nodes: rawNodes, links: rawLinks, isDrillDown } = useMemo(() => {
     // --- MODE 1: DRILL DOWN (Single Category -> Subcategories) ---
@@ -79,7 +78,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
         ...sortedSubKeys.map(name => ({ 
           name, 
           displayName: name,
-          color: '#cbd5e1', 
+          color: isDarkMode ? '#475569' : '#cbd5e1', 
           value: subMap[name],
           isInteractable: false,
           type: 'SUB'
@@ -160,7 +159,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
 
     // 2. Deficit (if expense > income) - Color: Dark Slate/Black
     if (hasDeficit) {
-        addNode({ name: 'Deficyt', displayName: 'Deficyt', color: '#334155', type: 'DEFICIT', value: deficitAmount });
+        addNode({ name: 'Deficyt', displayName: 'Deficyt', color: isDarkMode ? '#cbd5e1' : '#334155', type: 'DEFICIT', value: deficitAmount });
     }
 
     // 3. Budget (Central Node)
@@ -171,7 +170,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     const budgetIndex = addNode({ 
         name: 'Budżet', 
         displayName: 'Budżet', 
-        color: '#0f172a', 
+        color: isDarkMode ? '#e2e8f0' : '#0f172a', 
         type: 'BUDGET', 
         value: budgetD3Value, 
         realValue: totalIncome 
@@ -252,7 +251,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
     }
 
     return { nodes, links, isDrillDown: false };
-  }, [transactions, categories, drillDownCategoryId, viewMode]);
+  }, [transactions, categories, drillDownCategoryId, viewMode, isDarkMode]);
 
   const layoutData = useMemo(() => {
     if (dimensions.width === 0 || rawNodes.length === 0) return null;
@@ -322,40 +321,29 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
   const getLinkColor = (link: any) => {
       // 1. Drill Down Mode
       if (isDrillDown) {
-          // If drilling down, we check if the active category is a savings category or not
           const isSavings = categories.find(c => c.id === drillDownCategoryId)?.isIncludedInSavings;
           return isSavings ? '#3b82f6' : '#ef4444';
       }
       
       // 2. Main View Mode
-      
-      // Deficit -> Budget (Black/Dark Slate)
-      if (link.source.type === 'DEFICIT') return '#334155';
-
-      // Income -> Budget (Always Green)
+      if (link.source.type === 'DEFICIT') return isDarkMode ? '#cbd5e1' : '#334155';
       if (link.target.type === 'BUDGET') return '#22c55e';
 
-      // Budget -> ...
       if (link.source.type === 'BUDGET') {
-          if (link.target.type === 'SURPLUS') return '#10b981'; // Match node color (Emerald 500)
-          
-          if (link.target.type === 'SAVINGS') {
-              return '#3b82f6'; // Blue
-          }
-          if (link.target.type === 'EXPENSE') {
-              return '#ef4444'; // Red (Consumptive Expense)
-          }
-          
-          // Fallback if type is missing
+          if (link.target.type === 'SURPLUS') return '#10b981'; 
+          if (link.target.type === 'SAVINGS') return '#3b82f6'; 
+          if (link.target.type === 'EXPENSE') return '#ef4444'; 
           return link.target.color; 
       }
 
-      // Category -> Subcategory (Detailed View)
-      if (link.source.type === 'SAVINGS') return '#3b82f6'; // Blue
+      if (link.source.type === 'SAVINGS') return '#3b82f6';
       if (link.source.type === 'EXPENSE') return '#ef4444';
 
-      return '#e2e8f0';
+      return isDarkMode ? '#334155' : '#e2e8f0';
   };
+
+  const textColor = isDarkMode ? '#e2e8f0' : '#1e293b';
+  const subTextColor = isDarkMode ? '#94a3b8' : '#64748b';
 
   return (
     <div className="w-full flex flex-col" style={{ height: '650px' }}>
@@ -364,21 +352,21 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
             {isDrillDown ? (
                 <button 
                     onClick={() => setDrillDownCategoryId(null)}
-                    className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-full transition-colors animate-fade-in"
+                    className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 px-3 py-1.5 rounded-full transition-colors animate-fade-in"
                 >
                     <ArrowLeft size={14} /> Wróć do pełnego obrazu
                 </button>
             ) : (
-                <div className="flex bg-slate-50 p-1 rounded-lg">
+                <div className="flex bg-slate-50 dark:bg-slate-700 p-1 rounded-lg">
                     <button
                         onClick={() => setViewMode('CATEGORY')}
-                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === 'CATEGORY' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === 'CATEGORY' ? 'bg-white dark:bg-slate-600 shadow-sm text-indigo-600 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
                     >
                         <Layers size={14} /> Główne
                     </button>
                     <button
                         onClick={() => setViewMode('SUBCATEGORY')}
-                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === 'SUBCATEGORY' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === 'SUBCATEGORY' ? 'bg-white dark:bg-slate-600 shadow-sm text-indigo-600 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
                     >
                         <Grid size={14} /> Szczegółowe
                     </button>
@@ -388,7 +376,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
 
         <div ref={containerRef} className="flex-1 w-full relative overflow-hidden">
            {!layoutData ? (
-              <div className="h-full flex items-center justify-center text-slate-400">
+              <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500">
                  {rawNodes.length === 0 ? 'Brak danych' : 'Ładowanie...'}
               </div>
            ) : (
@@ -404,7 +392,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                               d={path || ''} 
                               fill="none" 
                               stroke={strokeColor}
-                              strokeOpacity={viewMode === 'SUBCATEGORY' && link.source.type !== 'BUDGET' ? 0.4 : 0.6}
+                              strokeOpacity={viewMode === 'SUBCATEGORY' && link.source.type !== 'BUDGET' ? 0.3 : 0.5}
                               strokeWidth={Math.max(1, link.width)} 
                               className="hover:stroke-opacity-80 transition-all duration-300"
                            >
@@ -419,7 +407,6 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                         const isInteractable = node.isInteractable && !isDrillDown;
                         const showLabel = height > 8; 
                         
-                        // Use realValue if present (e.g. for Budget node with deficit), otherwise standard value
                         const displayValue = node.realValue !== undefined ? node.realValue : node.value;
 
                         const isLeft = node.x0 < dimensions.width / 2;
@@ -451,7 +438,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                                      y={(node.y1 + node.y0) / 2 - 6}
                                      dy="0.35em"
                                      textAnchor={textAnchor}
-                                     fontSize={11} fontWeight={600} fill="#1e293b"
+                                     fontSize={11} fontWeight={600} fill={textColor}
                                      className="pointer-events-none"
                                   >
                                      {node.displayName || node.name}
@@ -461,7 +448,7 @@ export const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ transactions, cate
                                      y={(node.y1 + node.y0) / 2 + 6}
                                      dy="0.35em"
                                      textAnchor={textAnchor}
-                                     fontSize={10} fill="#64748b"
+                                     fontSize={10} fill={subTextColor}
                                      className={`pointer-events-none`}
                                   >
                                      {formatValue(displayValue)}

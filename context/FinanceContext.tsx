@@ -1,9 +1,11 @@
 
-import React, { createContext, useContext, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, ReactNode, useEffect } from 'react';
 import { CategoryItem, Transaction, TransactionType, BackupData, SubcategoryItem, FinancialSummary } from '../types';
 import { DEFAULT_CATEGORIES, SYSTEM_IDS } from '../constants';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useDataMigration } from '../hooks/useDataMigration';
+
+type Theme = 'light' | 'dark';
 
 interface FinanceContextType {
   // State
@@ -11,6 +13,7 @@ interface FinanceContextType {
   categories: CategoryItem[];
   savedTags: string[];
   isPrivateMode: boolean;
+  theme: Theme;
   
   // Derived State
   allTags: string[];
@@ -19,6 +22,7 @@ interface FinanceContextType {
 
   // Setters / Actions
   setIsPrivateMode: (val: boolean) => void;
+  toggleTheme: () => void;
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
   updateTransaction: (tx: Transaction) => void;
   deleteTransaction: (id: string) => void;
@@ -52,9 +56,24 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [transactions, setTransactions] = useLocalStorage<Transaction[]>('btrackr_transactions', []);
   const [savedTags, setSavedTags] = useLocalStorage<string[]>('btrackr_tags', []);
   const [isPrivateMode, setIsPrivateMode] = useLocalStorage<boolean>('btrackr_private_mode', false);
+  const [theme, setTheme] = useLocalStorage<Theme>('btrackr_theme', 'light');
 
   // --- Migration ---
   useDataMigration({ categories, setCategories, transactions, setTransactions });
+
+  // --- Theme Effect ---
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
 
   // --- Derived State ---
   const allTags = useMemo(() => {
@@ -263,7 +282,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const value = {
-    transactions, categories, savedTags, isPrivateMode, setIsPrivateMode,
+    transactions, categories, savedTags, isPrivateMode, setIsPrivateMode, theme, toggleTheme,
     allTags, summary, operationalBalance,
     addTransaction, updateTransaction, deleteTransaction, clearTransactions,
     bulkUpdateCategory, bulkUpdateTags, splitTransaction,

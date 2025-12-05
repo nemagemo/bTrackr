@@ -46,13 +46,13 @@ export const TopTags: React.FC<TopTagsProps> = ({ transactions, categories, isPr
   }, [transactions, savingsCategoryIds]);
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-full flex flex-col">
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 h-full flex flex-col transition-colors">
       <div className="mb-6 flex justify-between items-start">
         <div>
-          <h3 className="font-semibold text-slate-800">Ranking Tagów</h3>
-          <p className="text-xs text-slate-400">Najdroższe projekty i oznaczenia</p>
+          <h3 className="font-semibold text-slate-800 dark:text-white">Ranking Tagów</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Najdroższe projekty i oznaczenia</p>
         </div>
-        <div className="p-2 bg-pink-50 text-pink-600 rounded-lg">
+        <div className="p-2 bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 rounded-lg">
            <Hash size={18} />
         </div>
       </div>
@@ -66,18 +66,18 @@ export const TopTags: React.FC<TopTagsProps> = ({ transactions, categories, isPr
                  <div key={item.name} className="relative group">
                     <div className="flex justify-between items-end text-sm mb-1 relative z-10">
                        <div className="flex items-center gap-2">
-                          <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">#{item.name}</span>
+                          <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600">#{item.name}</span>
                        </div>
                        <div className="text-right">
-                          <span className="font-semibold text-slate-800">
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">
                              {isPrivateMode ? '***' : CURRENCY_FORMATTER.format(item.value)}
                           </span>
                        </div>
                     </div>
                     
-                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1">
+                    <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mt-1">
                        <div 
-                          className="h-full rounded-full bg-pink-500 transition-all duration-500"
+                          className="h-full rounded-full bg-pink-500 dark:bg-pink-600 transition-all duration-500"
                           style={{ width: `${barWidth}%` }}
                        />
                     </div>
@@ -85,8 +85,8 @@ export const TopTags: React.FC<TopTagsProps> = ({ transactions, categories, isPr
                )
             })
         ) : (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 py-8">
-               <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 py-8">
+               <div className="w-12 h-12 bg-slate-50 dark:bg-slate-700 rounded-full flex items-center justify-center mb-3">
                   <Hash size={20} className="opacity-40" />
                </div>
                <p className="text-sm font-medium">Brak tagów</p>

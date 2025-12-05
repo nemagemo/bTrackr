@@ -59,27 +59,27 @@ export const TransferModal: React.FC<TransferModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-          <h2 className="text-lg font-bold text-slate-800">Usuwanie kategorii</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden transition-colors">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800">
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white">Usuwanie kategorii</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
             <X size={24} />
           </button>
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex gap-3 items-start">
-            <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={20} />
+          <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-900/30 flex gap-3 items-start">
+            <AlertTriangle className="text-red-500 dark:text-red-400 shrink-0 mt-0.5" size={20} />
             <div>
-              <p className="text-sm text-red-800 font-medium">
+              <p className="text-sm text-red-800 dark:text-red-300 font-medium">
                 Zamierzasz usunąć kategorię <span className="font-bold">"{categoryToDelete.name}"</span>.
               </p>
               {affectedCount > 0 ? (
-                <p className="text-xs text-red-600 mt-1">
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
                   Ta kategoria zawiera <strong>{affectedCount}</strong> transakcji.
                 </p>
               ) : (
-                <p className="text-xs text-red-600 mt-1">
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
                   Ta kategoria jest pusta.
                 </p>
               )}
@@ -88,19 +88,19 @@ export const TransferModal: React.FC<TransferModalProps> = ({
 
           {affectedCount > 0 && (
             <div className="space-y-3">
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-slate-600 dark:text-slate-400">
                 Gdzie chcesz przenieść te transakcje?
               </p>
               
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-slate-500">Nowa kategoria</label>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">Nowa kategoria</label>
                 <select
                   value={targetCategoryId}
                   onChange={(e) => {
                     setTargetCategoryId(e.target.value);
                     setTargetSubcategoryId('');
                   }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900"
+                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900 dark:text-white"
                 >
                   <option value="">Domyślnie ("Inne")</option>
                   {availableCategories.map(c => (
@@ -111,11 +111,11 @@ export const TransferModal: React.FC<TransferModalProps> = ({
 
               {selectedTargetCategory && selectedTargetCategory.subcategories.length > 0 && (
                 <div className="space-y-2 animate-fade-in">
-                  <label className="block text-xs font-medium text-slate-500">Nowa podkategoria</label>
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">Nowa podkategoria</label>
                   <select
                     value={targetSubcategoryId}
                     onChange={(e) => setTargetSubcategoryId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900"
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900 dark:text-white"
                   >
                     <option value="">Domyślnie ("Inne")</option>
                     {selectedTargetCategory.subcategories.map(s => (
@@ -134,7 +134,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({
           )}
         </div>
 
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-3 justify-end">
+        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 flex gap-3 justify-end">
           <Button variant="secondary" onClick={onClose}>Anuluj</Button>
           <Button variant="danger" onClick={handleConfirm}>
             {targetCategoryId ? 'Przenieś i Usuń' : 'Usuń'}

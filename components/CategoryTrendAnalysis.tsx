@@ -15,6 +15,7 @@ interface CategoryTrendAnalysisProps {
   yearAggregation?: 'MONTHLY' | 'QUARTERLY';
   onToggleAggregation?: (mode: AggregationMode) => void;
   isPrivateMode?: boolean;
+  isDarkMode?: boolean;
 }
 
 const COLORS = [
@@ -31,7 +32,8 @@ export const CategoryTrendAnalysis: React.FC<CategoryTrendAnalysisProps> = ({
    historyAggregation = 'YEARLY',
    yearAggregation = 'MONTHLY',
    onToggleAggregation,
-   isPrivateMode
+   isPrivateMode,
+   isDarkMode
 }) => {
   // 1. Identify categories that actually have expense transactions
   const usedCategoryIds = useMemo(() => {
@@ -203,8 +205,8 @@ export const CategoryTrendAnalysis: React.FC<CategoryTrendAnalysisProps> = ({
 
   if (!selectedCategoryId && expenseCategories.length === 0) {
       return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center min-h-[200px]">
-            <p className="text-slate-400 text-sm">Brak wydatków do analizy.</p>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-center min-h-[200px] transition-colors">
+            <p className="text-slate-400 dark:text-slate-500 text-sm">Brak wydatków do analizy.</p>
         </div>
       );
   }
@@ -221,31 +223,31 @@ export const CategoryTrendAnalysis: React.FC<CategoryTrendAnalysisProps> = ({
   });
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h3 className="font-semibold text-slate-800">Kategorie</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-white">Kategorie</h3>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Aggregation Switcher (Only visible for ALL history) */}
           {periodType === 'ALL' && onToggleAggregation && (
-            <div className="flex bg-slate-50 p-1 rounded-lg mr-2 animate-fade-in">
+            <div className="flex bg-slate-50 dark:bg-slate-700 p-1 rounded-lg mr-2 animate-fade-in transition-colors">
                <button
                   onClick={() => onToggleAggregation('YEARLY')}
-                  className={`px-2 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${historyAggregation === 'YEARLY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-2 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${historyAggregation === 'YEARLY' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                >
                   <Grip size={14} /> Rocznie
                </button>
                <button
                   onClick={() => onToggleAggregation('QUARTERLY')}
-                  className={`px-2 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${historyAggregation === 'QUARTERLY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-2 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${historyAggregation === 'QUARTERLY' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                >
                   <LayoutGrid size={14} /> Kwartalnie
                </button>
                <button
                   onClick={() => onToggleAggregation('MONTHLY')}
-                  className={`px-2 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${historyAggregation === 'MONTHLY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-2 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${historyAggregation === 'MONTHLY' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                >
                   <LayoutList size={14} /> Miesięcznie
                </button>
@@ -255,7 +257,7 @@ export const CategoryTrendAnalysis: React.FC<CategoryTrendAnalysisProps> = ({
           <select 
             value={selectedCategoryId} 
             onChange={(e) => setSelectedCategoryId(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 min-w-[180px]"
+            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white min-w-[180px] transition-colors"
           >
             {expenseCategories.map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
@@ -265,7 +267,7 @@ export const CategoryTrendAnalysis: React.FC<CategoryTrendAnalysisProps> = ({
       </div>
 
       <div className="w-full">
-        <StackedBarChart data={chartData} keys={activeKeys} colors={COLORS} isPrivateMode={isPrivateMode} />
+        <StackedBarChart data={chartData} keys={activeKeys} colors={COLORS} isPrivateMode={isPrivateMode} isDarkMode={isDarkMode} />
       </div>
     </div>
   );

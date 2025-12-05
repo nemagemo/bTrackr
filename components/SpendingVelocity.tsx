@@ -8,11 +8,12 @@ interface SpendingVelocityProps {
   categories: CategoryItem[];
   currentYear: number;
   isPrivateMode?: boolean;
+  isDarkMode?: boolean;
 }
 
 type ComparisonMode = 'PREV_MONTH' | 'AVG_3M' | 'AVG_6M' | 'AVG_12M';
 
-export const SpendingVelocity: React.FC<SpendingVelocityProps> = ({ transactions, categories, currentYear, isPrivateMode }) => {
+export const SpendingVelocity: React.FC<SpendingVelocityProps> = ({ transactions, categories, currentYear, isPrivateMode, isDarkMode }) => {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>('PREV_MONTH');
 
   const savingsCategoryIds = useMemo(() => {
@@ -111,48 +112,48 @@ export const SpendingVelocity: React.FC<SpendingVelocityProps> = ({ transactions
         { 
             label: currentSeriesLabel, 
             data: currentSeriesData, 
-            color: '#4f46e5', // Indigo-600
+            color: isDarkMode ? '#818cf8' : '#4f46e5', // Indigo-400 (dark) vs Indigo-600 (light)
             dashed: false 
         },
         { 
             label: comparisonLabel, 
             data: comparisonSeriesData, 
-            color: '#94a3b8', // Slate-400
+            color: isDarkMode ? '#475569' : '#94a3b8', // Slate-600 (dark) vs Slate-400 (light)
             dashed: true 
         }
     ];
-  }, [transactions, currentYear, comparisonMode, savingsCategoryIds]);
+  }, [transactions, currentYear, comparisonMode, savingsCategoryIds, isDarkMode]);
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col w-full">
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col w-full transition-colors">
        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
-            <h3 className="font-semibold text-slate-800">Wyścig Wydatków</h3>
-            <p className="text-xs text-slate-400">Tempo wydawania w bieżącym okresie (bez oszczędności)</p>
+            <h3 className="font-semibold text-slate-800 dark:text-white">Wyścig Wydatków</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Tempo wydawania w bieżącym okresie (bez oszczędności)</p>
         </div>
         
-        <div className="bg-slate-100 p-1 rounded-lg flex overflow-x-auto max-w-full">
+        <div className="bg-slate-100 dark:bg-slate-700 p-1 rounded-lg flex overflow-x-auto max-w-full transition-colors">
             <button
                 onClick={() => setComparisonMode('PREV_MONTH')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${comparisonMode === 'PREV_MONTH' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${comparisonMode === 'PREV_MONTH' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
             >
                 Poprzedni msc.
             </button>
             <button
                 onClick={() => setComparisonMode('AVG_3M')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${comparisonMode === 'AVG_3M' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${comparisonMode === 'AVG_3M' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
             >
                 Średnia 3M
             </button>
             <button
                 onClick={() => setComparisonMode('AVG_6M')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${comparisonMode === 'AVG_6M' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${comparisonMode === 'AVG_6M' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
             >
                 Średnia 6M
             </button>
              <button
                 onClick={() => setComparisonMode('AVG_12M')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${comparisonMode === 'AVG_12M' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all ${comparisonMode === 'AVG_12M' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
             >
                 Średnia 12M
             </button>
@@ -160,7 +161,7 @@ export const SpendingVelocity: React.FC<SpendingVelocityProps> = ({ transactions
       </div>
       
       <div className="min-h-[250px]">
-         <CumulativeChart series={chartData} height={280} isPrivateMode={isPrivateMode} />
+         <CumulativeChart series={chartData} height={280} isPrivateMode={isPrivateMode} isDarkMode={isDarkMode} />
       </div>
     </div>
   );

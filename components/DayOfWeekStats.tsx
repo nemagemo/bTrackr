@@ -7,9 +7,10 @@ interface DayOfWeekStatsProps {
   transactions: Transaction[];
   categories: CategoryItem[];
   isPrivateMode?: boolean;
+  isDarkMode?: boolean;
 }
 
-export const DayOfWeekStats: React.FC<DayOfWeekStatsProps> = ({ transactions, categories, isPrivateMode }) => {
+export const DayOfWeekStats: React.FC<DayOfWeekStatsProps> = ({ transactions, categories, isPrivateMode, isDarkMode }) => {
   const savingsCategoryIds = useMemo(() => {
       return new Set(categories.filter(c => c.isIncludedInSavings).map(c => c.id));
   }, [categories]);
@@ -41,14 +42,14 @@ export const DayOfWeekStats: React.FC<DayOfWeekStatsProps> = ({ transactions, ca
   }, [transactions, savingsCategoryIds]);
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-full flex flex-col">
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 h-full flex flex-col transition-colors">
        <div className="mb-6">
-        <h3 className="font-semibold text-slate-800">Radar Nawyków</h3>
-        <p className="text-xs text-slate-400">Rozkład wydatków w dniach tygodnia (bez oszczędności)</p>
+        <h3 className="font-semibold text-slate-800 dark:text-white">Radar Nawyków</h3>
+        <p className="text-xs text-slate-400 dark:text-slate-500">Rozkład wydatków w dniach tygodnia (bez oszczędności)</p>
       </div>
       
       <div className="flex-1 min-h-[250px]">
-         <DayOfWeekChart data={chartData} height={250} isPrivateMode={isPrivateMode} />
+         <DayOfWeekChart data={chartData} height={250} isPrivateMode={isPrivateMode} isDarkMode={isDarkMode} />
       </div>
     </div>
   );

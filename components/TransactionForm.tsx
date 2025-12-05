@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Database } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
@@ -39,8 +40,6 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
     if (!description || !amount || !categoryId || !date) return;
 
     // FIX TIMEZONE: Ustawiamy godzinę na 12:00:00 (Południe).
-    // Domyślne new Date(date) ustawia 00:00 UTC. W strefie GMT+1 to jest 23:00 poprzedniego dnia.
-    // Ustawienie godziny 12:00 jest bezpieczne dla większości stref czasowych.
     const dateObj = new Date(date);
     dateObj.setHours(12, 0, 0, 0);
     const finalDate = dateObj.toISOString();
@@ -68,14 +67,14 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
   };
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 space-y-4 relative">
+    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] dark:shadow-none border border-slate-100 dark:border-slate-700 space-y-4 relative">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="font-semibold text-slate-800">Nowa Transakcja</h3>
+        <h3 className="font-semibold text-slate-800 dark:text-slate-100">Nowa Transakcja</h3>
         {onLoadDemo && (
            <button 
              type="button" 
              onClick={onLoadDemo} 
-             className="text-[10px] flex items-center gap-1 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors"
+             className="text-[10px] flex items-center gap-1 text-slate-400 hover:text-indigo-600 bg-slate-50 dark:bg-slate-700 dark:text-slate-400 dark:hover:text-indigo-300 dark:hover:bg-slate-600 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors"
              title="Wgraj przykładowe dane"
            >
               <Database size={12} /> Wgraj demo
@@ -84,12 +83,12 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
       </div>
       
       <div className="flex justify-start mb-4">
-          <div className="flex bg-slate-100 p-1 rounded-lg">
+          <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg">
             <button
               type="button"
               onClick={() => setType(TransactionType.EXPENSE)}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                type === TransactionType.EXPENSE ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'
+                type === TransactionType.EXPENSE ? 'bg-white dark:bg-slate-600 text-red-600 dark:text-red-400 shadow-sm' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               Wydatek
@@ -98,7 +97,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
               type="button"
               onClick={() => setType(TransactionType.INCOME)}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                type === TransactionType.INCOME ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'
+                type === TransactionType.INCOME ? 'bg-white dark:bg-slate-600 text-green-600 dark:text-green-400 shadow-sm' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               Przychód
@@ -108,7 +107,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Opis</label>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Opis</label>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <input
@@ -116,14 +115,14 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={type === TransactionType.INCOME ? "np. Wypłata, Dywidenda" : "np. Zakupy w Biedronce"}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-500 focus:border-transparent transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600"
                 required
               />
               {description && (
                 <button
                   type="button"
                   onClick={() => setDescription('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 >
                   <X size={14} />
                 </button>
@@ -134,17 +133,17 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
 
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Data</label>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Data</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-500 focus:border-transparent transition-all text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"
               required
             />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Kwota (PLN)</label>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Kwota (PLN)</label>
             <div className="relative">
               <input
                 type="number"
@@ -152,14 +151,14 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-slate-900"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-500 focus:border-transparent transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600"
                 required
               />
               {amount && (
                 <button
                   type="button"
                   onClick={() => setAmount('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 >
                   <X size={14} />
                 </button>
@@ -170,14 +169,14 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
 
         <div className="space-y-2">
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Kategoria</label>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Kategoria</label>
             <select
               value={categoryId}
               onChange={(e) => {
                 setCategoryId(e.target.value);
                 setSubcategoryId('');
               }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none text-slate-900"
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-500 focus:border-transparent transition-all appearance-none text-slate-900 dark:text-white"
             >
               {availableCategories.map((cat) => (
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -190,7 +189,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onAdd, categor
                 <select
                 value={subcategoryId}
                 onChange={(e) => setSubcategoryId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all appearance-none text-slate-600"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-500 focus:border-transparent transition-all appearance-none text-slate-600 dark:text-slate-300"
               >
                 <option value="">-- Podkategoria --</option>
                 {currentCategory.subcategories.map((sub) => (

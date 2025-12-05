@@ -295,9 +295,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-          <h2 className="text-lg font-bold text-slate-800">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden transition-colors">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800">
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white">
             {step === 'UPLOAD' && 'Importuj dane'}
             {step === 'MAP' && 'Dopasuj kolumny i format'}
             {step === 'DATE_CORRECTION' && 'Korekta błędnych dat'}
@@ -305,10 +305,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
             {step === 'DECISION' && 'Wykryto dane'}
             {step === 'BACKUP_CONFIRM' && 'Przywracanie kopii zapasowej'}
           </h2>
-          <button onClick={handleClose}><X size={24} className="text-slate-400"/></button>
+          <button onClick={handleClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"><X size={24}/></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/50 transition-colors">
           {step === 'UPLOAD' && (
              <StepUpload onFileUpload={handleFileUpload} error={error} />
           )}
