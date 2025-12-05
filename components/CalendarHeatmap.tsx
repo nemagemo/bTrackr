@@ -4,7 +4,7 @@ import { select, timeMonday, scaleThreshold, timeDays, timeYear, timeMonths } fr
 import { Layers, Combine, ChevronDown, ChevronUp } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
-import { PeriodType } from './AnalysisView';
+import { PeriodType } from '../hooks/useAnalysisData';
 
 interface YearlyHeatmapProps {
   year: number;

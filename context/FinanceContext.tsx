@@ -82,10 +82,12 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
   }, [transactions, categories]);
 
-  // Update balance in summary object (Income - Consumption)
+  // Balance (Nadwyżka Finansowa) = Przychody - Wydatki Konsumpcyjne.
+  // To jest kwota, która zostaje nam po opłaceniu życia, którą możemy przeznaczyć na oszczędności.
   summary.balance = summary.totalIncome - summary.totalExpense;
 
-  // Operational Balance (Net Cashflow) = Income - Expense - Savings
+  // Operational Balance (Dostępne Środki / Cashflow) = Przychody - Wydatki - Przelane Oszczędności.
+  // To jest realna gotówka, która pozostała na koncie bieżącym po opłaceniu wszystkiego (w tym przelewów na oszczędności).
   const operationalBalance = summary.totalIncome - summary.totalExpense - summary.savingsAmount;
 
   // --- Helpers ---

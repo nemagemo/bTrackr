@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Grip, LayoutList, LayoutGrid } from 'lucide-react';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { StackedBarChart } from './D3Charts';
-import { PeriodType, AggregationMode } from './AnalysisView';
+import { PeriodType, AggregationMode } from '../hooks/useAnalysisData';
 
 interface CategoryTrendAnalysisProps {
   transactions: Transaction[];
