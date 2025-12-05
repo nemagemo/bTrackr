@@ -7,28 +7,41 @@ interface StatCardProps {
   icon: React.ReactNode;
   trend?: 'up' | 'down' | 'neutral';
   colorClass?: string;
+  bgClass?: string;
   isPrivateMode?: boolean;
   subValue?: React.ReactNode;
 }
 
-export const StatCard: React.FC<StatCardProps> = ({ label, value, icon, colorClass = "text-slate-900", isPrivateMode, subValue }) => {
+export const StatCard: React.FC<StatCardProps> = ({ 
+  label, 
+  value, 
+  icon, 
+  colorClass = "text-slate-900", 
+  bgClass = "bg-slate-50 dark:bg-slate-700/30",
+  isPrivateMode, 
+  subValue 
+}) => {
   return (
-    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] dark:shadow-none border border-slate-100 dark:border-slate-700 flex flex-col items-start justify-between h-32 transition-transform hover:scale-[1.02]">
-      <div className="flex w-full justify-between items-start">
-        <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">{label}</span>
-        <div className={`p-2 rounded-lg bg-slate-50 dark:bg-slate-700/50 ${colorClass} dark:text-current`}>
-          {icon}
+    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] dark:shadow-none border border-slate-100 dark:border-slate-700 flex overflow-hidden h-28 transition-transform hover:scale-[1.02]">
+      {/* Left Side: Content */}
+      <div className="flex-1 p-5 flex flex-col justify-between min-w-0">
+        <span className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">{label}</span>
+        
+        <div>
+          <div className={`text-2xl font-bold tracking-tight truncate ${colorClass} dark:text-white`}>
+            {isPrivateMode ? '***' : value}
+          </div>
+          {subValue && (
+            <div className="text-xs font-medium mt-1 truncate text-slate-400 dark:text-slate-500">
+               {subValue}
+            </div>
+          )}
         </div>
       </div>
-      <div className="w-full">
-        <div className={`text-2xl font-bold tracking-tight ${colorClass} dark:text-white`}>
-          {isPrivateMode ? '***' : value}
-        </div>
-        {subValue && (
-          <div className="text-xs font-medium mt-1 truncate text-slate-400 dark:text-slate-500">
-             {subValue}
-          </div>
-        )}
+
+      {/* Right Side: Icon Strip */}
+      <div className={`w-14 flex items-center justify-center shrink-0 ${bgClass} ${colorClass} dark:text-current transition-colors`}>
+        {icon}
       </div>
     </div>
   );

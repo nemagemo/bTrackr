@@ -21,7 +21,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onSetActiveTab, on
     operationalBalance, 
     allTags, 
     isPrivateMode, 
-    addTransaction,
+    addTransaction, 
     deleteTransaction
   } = useFinance();
 
@@ -32,29 +32,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onSetActiveTab, on
         <StatCard 
           label="Dostępne środki" 
           value={CURRENCY_FORMATTER.format(operationalBalance)} 
-          icon={<Wallet className="text-slate-900" size={24} />}
+          icon={<Wallet size={24} strokeWidth={1.5} />}
           colorClass="text-slate-900"
+          bgClass="bg-slate-100 dark:bg-slate-700/40"
           isPrivateMode={isPrivateMode}
         />
         <StatCard 
           label="Przychody" 
           value={CURRENCY_FORMATTER.format(summary.totalIncome)} 
-          icon={<ArrowUpCircle className="text-green-600" size={24} />}
+          icon={<ArrowUpCircle size={24} strokeWidth={1.5} />}
           colorClass="text-green-600"
+          bgClass="bg-green-50 dark:bg-green-500/10"
           isPrivateMode={isPrivateMode}
         />
         <StatCard 
           label="Wydatki" 
           value={CURRENCY_FORMATTER.format(summary.totalExpense)} 
-          icon={<ArrowDownCircle className="text-red-600" size={24} />}
+          icon={<ArrowDownCircle size={24} strokeWidth={1.5} />}
           colorClass="text-red-600"
+          bgClass="bg-red-50 dark:bg-red-500/10"
           isPrivateMode={isPrivateMode}
         />
         <StatCard 
-          label="Oszczędności/Inwestycje" 
+          label="Oszczędności" 
           value={CURRENCY_FORMATTER.format(summary.savingsAmount)} 
-          icon={<PiggyBank className="text-emerald-600" size={24} />}
+          icon={<PiggyBank size={24} strokeWidth={1.5} />}
           colorClass="text-emerald-600"
+          bgClass="bg-emerald-50 dark:bg-emerald-500/10"
           isPrivateMode={isPrivateMode}
         />
       </div>
