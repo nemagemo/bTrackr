@@ -1,5 +1,3 @@
-
-
 import React, { useRef, useEffect, useState } from 'react';
 import { 
   select, 
@@ -17,7 +15,8 @@ import {
   max, 
   min,
   NumberValue,
-  format
+  format,
+  BaseType
 } from 'd3';
 import { CURRENCY_FORMATTER } from '../constants';
 
@@ -84,7 +83,7 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
     const stack = d3Stack().keys(keys);
     const stackedData = stack(data);
 
-    const x = scaleBand().domain(data.map(d => d.name)).range([0, chartWidth]).padding(0.3);
+    const x = scaleBand().domain(data.map(d => String(d.name))).range([0, chartWidth]).padding(0.3);
     const y = scaleLinear().domain([0, max(stackedData, layer => max(layer, d => d[1])) || 0]).nice().range([chartHeight, 0]);
     const colorScale = scaleOrdinal().domain(keys).range(colors);
 
@@ -92,47 +91,46 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
 
     const tooltip = select(containerRef.current).select(".tooltip");
 
+    // Use .each() to preserve the series context (key) for child rects
     g.selectAll("g.layer")
       .data(stackedData)
       .enter().append("g")
       .classed("layer", true)
       .attr("fill", d => colorScale(d.key) as string)
-      .selectAll("rect")
-      .data(d => d)
-      .enter().append("rect")
-      .attr("x", d => x(d.data.name) || 0)
-      .attr("y", d => y(d[1]))
-      .attr("height", d => y(d[0]) - y(d[1]))
-      .attr("width", x.bandwidth())
-      .on("mousemove", (event, d) => {
-         // Explicitly cast to Element to avoid TS overload resolution issues
-         const target = event.currentTarget as Element;
-         const parent = target.parentNode as Element;
-         const subcategoryName = (select(parent).datum() as any).key;
-         
-         const val = d.data[subcategoryName];
-         const total = keys.reduce((acc, k) => acc + (d.data[k] || 0), 0);
-         const pct = total ? ((val / total) * 100).toFixed(1) : '0.0';
+      .each(function(series) {
+          const seriesKey = series.key;
+          select(this).selectAll("rect")
+            .data(series)
+            .enter().append("rect")
+            .attr("x", d => x(String(d.data.name)) || 0)
+            .attr("y", d => y(d[1]))
+            .attr("height", d => y(d[0]) - y(d[1]))
+            .attr("width", x.bandwidth())
+            .on("mousemove", (event, d) => {
+               const val = d.data[seriesKey];
+               const total = keys.reduce((acc, k) => acc + (d.data[k] || 0), 0);
+               const pct = total ? ((val / total) * 100).toFixed(1) : '0.0';
 
-         tooltip.style("opacity", 1)
-                .html(`
-                  <div class="mb-1"><strong>${d.data.name}</strong></div>
-                  <div class="flex items-center gap-2 mb-1">
-                     <span style="width:8px;height:8px;border-radius:50%;background-color:${colorScale(subcategoryName)}"></span>
-                     <span>${subcategoryName}:</span>
-                     <span class="font-bold">${formatValue(val, isPrivateMode)}</span>
-                  </div>
-                  <div class="text-xs text-slate-400 text-right">${pct}% całości</div>
-                `)
-                .style("left", `${event.clientX + 10}px`)
-                .style("top", `${event.clientY + 10}px`);
-      })
-      .on("mouseleave", () => tooltip.style("opacity", 0));
+               tooltip.style("opacity", 1)
+                      .html(`
+                        <div class="mb-1"><strong>${d.data.name}</strong></div>
+                        <div class="flex items-center gap-2 mb-1">
+                           <span style="width:8px;height:8px;border-radius:50%;background-color:${colorScale(seriesKey)}"></span>
+                           <span>${seriesKey}:</span>
+                           <span class="font-bold">${formatValue(val, isPrivateMode)}</span>
+                        </div>
+                        <div class="text-xs text-slate-400 text-right">${pct}% całości</div>
+                      `)
+                      .style("left", `${event.clientX + 10}px`)
+                      .style("top", `${event.clientY + 10}px`);
+            })
+            .on("mouseleave", () => tooltip.style("opacity", 0));
+      });
 
     // Calculate ticks to avoid overlap (heuristic: 50px per label)
     const maxLabels = Math.floor(chartWidth / 50);
     const interval = Math.ceil(data.length / maxLabels);
-    const tickValues = data.map(d => d.name).filter((_, i) => i % interval === 0);
+    const tickValues = data.map(d => String(d.name)).filter((_, i) => i % interval === 0);
 
     g.append("g").attr("transform", `translate(0,${chartHeight})`)
         .call(axisBottom(x).tickValues(tickValues).tickSize(0))
@@ -183,7 +181,7 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
     const chartHeight = height - margin.top - margin.bottom;
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const x = scalePoint().domain(data.map(d => d.name)).range([0, chartWidth]);
+    const x = scalePoint().domain(data.map(d => String(d.name))).range([0, chartWidth]);
     
     const maxY = max(data, d => Math.max(...keys.map(k => d[k] || 0))) || 0;
     const y = scaleLinear().domain([0, maxY]).nice().range([chartHeight, 0]);
@@ -192,7 +190,7 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
     g.append("g").attr("class", "grid").call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
 
     const line = d3Line<any>()
-      .x(d => x(d.name) || 0)
+      .x(d => x(String(d.name)) || 0)
       .y(d => y(d.value))
       .curve(curveMonotoneX);
 
@@ -206,7 +204,7 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
     });
 
     sortedKeys.forEach(key => {
-       const lineData = data.map(d => ({ name: d.name, value: d[key] }));
+       const lineData = data.map(d => ({ name: String(d.name), value: d[key] }));
        const color = colorScale(key) as string;
        const isHighlighted = key === highlightKey;
        
@@ -245,7 +243,7 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
     // Calculate ticks to avoid overlap (heuristic: 50px per label)
     const maxLabels = Math.floor(chartWidth / 50);
     const interval = Math.ceil(data.length / maxLabels);
-    const tickValues = data.map(d => d.name).filter((_, i) => i % interval === 0);
+    const tickValues = data.map(d => String(d.name)).filter((_, i) => i % interval === 0);
 
     g.append("g").attr("transform", `translate(0,${chartHeight})`)
         .call(axisBottom(x).tickValues(tickValues).tickSize(0))
@@ -294,7 +292,7 @@ export const ComboChart: React.FC<ChartProps> = ({
     const chartHeight = height - margin.top - margin.bottom;
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const x = scaleBand().domain(data.map(d => d.name)).range([0, chartWidth]).padding(0.3);
+    const x = scaleBand().domain(data.map(d => String(d.name))).range([0, chartWidth]).padding(0.3);
     
     const maxBarValue = max(data, d => Math.max(d.income, d.expense)) || 0;
     
@@ -340,7 +338,7 @@ export const ComboChart: React.FC<ChartProps> = ({
     g.selectAll(".bar-inc")
       .data(data)
       .enter().append("rect")
-      .attr("x", d => (x(d.name) || 0) + (xSub('inc') || 0))
+      .attr("x", d => (x(String(d.name)) || 0) + (xSub('inc') || 0))
       .attr("y", d => yLeft(d.income))
       .attr("width", xSub.bandwidth())
       .attr("height", d => Math.abs(yLeft(0) - yLeft(d.income)))
@@ -350,7 +348,7 @@ export const ComboChart: React.FC<ChartProps> = ({
     g.selectAll(".bar-exp")
       .data(data)
       .enter().append("rect")
-      .attr("x", d => (x(d.name) || 0) + (xSub('exp') || 0))
+      .attr("x", d => (x(String(d.name)) || 0) + (xSub('exp') || 0))
       .attr("y", d => yLeft(d.expense))
       .attr("width", xSub.bandwidth())
       .attr("height", d => Math.abs(yLeft(0) - yLeft(d.expense)))
@@ -358,20 +356,20 @@ export const ComboChart: React.FC<ChartProps> = ({
       .attr("rx", 2);
 
     if (showSavingsRateLine) {
-        const lineRate = d3Line<any>().x(d => (x(d.name) || 0) + x.bandwidth() / 2).y(d => yRight(Math.max(0, d.savingsRate))).curve(curveMonotoneX);
+        const lineRate = d3Line<any>().x(d => (x(String(d.name)) || 0) + x.bandwidth() / 2).y(d => yRight(Math.max(0, d.savingsRate))).curve(curveMonotoneX);
         g.append("path").datum(data).attr("fill", "none").attr("stroke", "#6366f1").attr("stroke-width", 2).attr("d", lineRate);
-        g.selectAll(".dot-rate").data(data).enter().append("circle").attr("cx", d => (x(d.name) || 0) + x.bandwidth() / 2).attr("cy", d => yRight(Math.max(0, d.savingsRate))).attr("r", 3).attr("fill", "#6366f1").attr("stroke", "#fff").attr("stroke-width", 1.5);
+        g.selectAll(".dot-rate").data(data).enter().append("circle").attr("cx", d => (x(String(d.name)) || 0) + x.bandwidth() / 2).attr("cy", d => yRight(Math.max(0, d.savingsRate))).attr("r", 3).attr("fill", "#6366f1").attr("stroke", "#fff").attr("stroke-width", 1.5);
     }
 
     if (showSurplusLine) {
-        const lineBalance = d3Line<any>().x(d => (x(d.name) || 0) + x.bandwidth() / 2).y(d => yLeft(d.income - d.expense)).curve(curveMonotoneX);
+        const lineBalance = d3Line<any>().x(d => (x(String(d.name)) || 0) + x.bandwidth() / 2).y(d => yLeft(d.income - d.expense)).curve(curveMonotoneX);
         g.append("path").datum(data).attr("fill", "none").attr("stroke", "#0ea5e9").attr("stroke-width", 2).attr("stroke-dasharray", "4,2").attr("d", lineBalance);
-        g.selectAll(".dot-balance").data(data).enter().append("circle").attr("cx", d => (x(d.name) || 0) + x.bandwidth() / 2).attr("cy", d => yLeft(d.income - d.expense)).attr("r", 3).attr("fill", "#0ea5e9").attr("stroke", "#fff").attr("stroke-width", 1.5);
+        g.selectAll(".dot-balance").data(data).enter().append("circle").attr("cx", d => (x(String(d.name)) || 0) + x.bandwidth() / 2).attr("cy", d => yLeft(d.income - d.expense)).attr("r", 3).attr("fill", "#0ea5e9").attr("stroke", "#fff").attr("stroke-width", 1.5);
     }
 
     const maxLabels = Math.floor(chartWidth / 50);
     const interval = Math.ceil(data.length / maxLabels);
-    const tickValues = data.map(d => d.name).filter((_, i) => i % interval === 0);
+    const tickValues = data.map(d => String(d.name)).filter((_, i) => i % interval === 0);
 
     g.append("g").attr("transform", `translate(0,${chartHeight})`)
         .call(axisBottom(x).tickValues(tickValues).tickSize(0))
@@ -396,14 +394,14 @@ export const ComboChart: React.FC<ChartProps> = ({
        .data(data)
        .enter().append("rect")
        .attr("class", "overlay-rect")
-       .attr("x", d => x(d.name) || 0)
+       .attr("x", d => x(String(d.name)) || 0)
        .attr("y", 0)
        .attr("width", x.bandwidth())
        .attr("height", chartHeight)
        .attr("fill", "transparent")
        .on("mouseenter", () => guideLine.style("opacity", 1))
        .on("mousemove", (event, d) => {
-           const centerX = (x(d.name) || 0) + x.bandwidth() / 2;
+           const centerX = (x(String(d.name)) || 0) + x.bandwidth() / 2;
            guideLine.attr("x1", centerX).attr("x2", centerX);
            
            const surplus = d.income - d.expense;
@@ -471,7 +469,7 @@ export const DifferenceChart: React.FC<ChartProps> = ({
     const chartHeight = height - margin.top - margin.bottom;
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const x = scaleBand().domain(data.map(d => d.name)).range([0, chartWidth]).padding(0.3);
+    const x = scaleBand().domain(data.map(d => String(d.name))).range([0, chartWidth]).padding(0.3);
     
     // Calculate Balance
     const processedData = data.map(d => ({
@@ -523,7 +521,7 @@ export const DifferenceChart: React.FC<ChartProps> = ({
     g.selectAll(".bar")
       .data(processedData)
       .enter().append("rect")
-      .attr("x", d => x(d.name) || 0)
+      .attr("x", d => x(String(d.name)) || 0)
       .attr("y", d => d.balance >= 0 ? y(d.balance) : y(0))
       .attr("width", x.bandwidth())
       .attr("height", d => Math.abs(y(d.balance) - y(0)))
@@ -533,18 +531,18 @@ export const DifferenceChart: React.FC<ChartProps> = ({
     // Savings Rate Line
     if (showSavingsRateLine) {
         const lineRate = d3Line<any>()
-            .x(d => (x(d.name) || 0) + x.bandwidth() / 2)
+            .x(d => (x(String(d.name)) || 0) + x.bandwidth() / 2)
             .y(d => yRight(d.savingsRate))
             .curve(curveMonotoneX);
             
         g.append("path").datum(data).attr("fill", "none").attr("stroke", "#6366f1").attr("stroke-width", 2).attr("d", lineRate);
-        g.selectAll(".dot-rate").data(data).enter().append("circle").attr("cx", d => (x(d.name) || 0) + x.bandwidth() / 2).attr("cy", d => yRight(d.savingsRate)).attr("r", 3).attr("fill", "#6366f1").attr("stroke", "#fff").attr("stroke-width", 1.5);
+        g.selectAll(".dot-rate").data(data).enter().append("circle").attr("cx", d => (x(String(d.name)) || 0) + x.bandwidth() / 2).attr("cy", d => yRight(d.savingsRate)).attr("r", 3).attr("fill", "#6366f1").attr("stroke", "#fff").attr("stroke-width", 1.5);
     }
 
     // Axes
     const maxLabels = Math.floor(chartWidth / 50);
     const interval = Math.ceil(data.length / maxLabels);
-    const tickValues = data.map(d => d.name).filter((_, i) => i % interval === 0);
+    const tickValues = data.map(d => String(d.name)).filter((_, i) => i % interval === 0);
 
     g.append("g").attr("transform", `translate(0,${chartHeight})`)
         .call(axisBottom(x).tickValues(tickValues).tickSize(0))
@@ -569,14 +567,14 @@ export const DifferenceChart: React.FC<ChartProps> = ({
        .data(processedData)
        .enter().append("rect")
        .attr("class", "overlay-rect")
-       .attr("x", d => x(d.name) || 0)
+       .attr("x", d => x(String(d.name)) || 0)
        .attr("y", 0)
        .attr("width", x.bandwidth())
        .attr("height", chartHeight)
        .attr("fill", "transparent")
        .on("mouseenter", () => guideLine.style("opacity", 1))
        .on("mousemove", (event, d) => {
-           const centerX = (x(d.name) || 0) + x.bandwidth() / 2;
+           const centerX = (x(String(d.name)) || 0) + x.bandwidth() / 2;
            guideLine.attr("x1", centerX).attr("x2", centerX);
            
            let htmlContent = `
@@ -735,7 +733,7 @@ export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPri
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
     const x = scaleBand()
-      .domain(data.map(d => d.day))
+      .domain(data.map(d => String(d.day)))
       .range([0, chartWidth])
       .padding(0.2);
 
@@ -751,7 +749,7 @@ export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPri
     g.selectAll(".bar")
       .data(data)
       .enter().append("rect")
-      .attr("x", d => x(d.day) || 0)
+      .attr("x", d => x(String(d.day)) || 0)
       .attr("y", d => y(d.value))
       .attr("width", x.bandwidth())
       .attr("height", d => chartHeight - y(d.value))
@@ -817,7 +815,7 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
     });
 
     const x = scaleBand()
-      .domain(processedData.map(d => d.name))
+      .domain(processedData.map(d => String(d.name)))
       .range([0, chartWidth])
       .padding(0.3);
 
@@ -839,7 +837,7 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
     g.selectAll(".bar")
       .data(processedData)
       .enter().append("rect")
-      .attr("x", d => x(d.name) || 0)
+      .attr("x", d => x(String(d.name)) || 0)
       .attr("y", d => y(Math.max(d.start, d.end)))
       .attr("width", x.bandwidth())
       .attr("height", d => Math.max(1, Math.abs(y(d.start) - y(d.end))))
@@ -870,7 +868,7 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
        .data(processedData)
        .enter().append("text")
        .text(d => formatValue(d.value, isPrivateMode))
-       .attr("x", d => (x(d.name) || 0) + x.bandwidth() / 2)
+       .attr("x", d => (x(String(d.name)) || 0) + x.bandwidth() / 2)
        .attr("y", d => {
            const barTop = y(Math.max(d.start, d.end)); // This is visually the top edge of the rect
            const barBottom = y(Math.min(d.start, d.end)); // This is visually the bottom edge
@@ -897,8 +895,8 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
         const yPos = y(curr.end);
         
         lineData.push({
-            x1: (x(curr.name) || 0) + x.bandwidth(),
-            x2: (x(next.name) || 0),
+            x1: (x(String(curr.name)) || 0) + x.bandwidth(),
+            x2: (x(String(next.name)) || 0),
             y: yPos
         });
     }
