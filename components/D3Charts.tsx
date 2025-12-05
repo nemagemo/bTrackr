@@ -1,4 +1,5 @@
 
+
 import React, { useRef, useEffect, useState } from 'react';
 import { 
   select, 
@@ -104,7 +105,11 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
       .attr("height", d => y(d[0]) - y(d[1]))
       .attr("width", x.bandwidth())
       .on("mousemove", (event, d) => {
-         const subcategoryName = (select(event.currentTarget.parentNode).datum() as any).key;
+         // Explicitly cast to Element to avoid TS overload resolution issues
+         const target = event.currentTarget as Element;
+         const parent = target.parentNode as Element;
+         const subcategoryName = (select(parent).datum() as any).key;
+         
          const val = d.data[subcategoryName];
          const total = keys.reduce((acc, k) => acc + (d.data[k] || 0), 0);
          const pct = total ? ((val / total) * 100).toFixed(1) : '0.0';
@@ -291,15 +296,11 @@ export const ComboChart: React.FC<ChartProps> = ({
 
     const x = scaleBand().domain(data.map(d => d.name)).range([0, chartWidth]).padding(0.3);
     
-    // --- DYNAMIC DOMAIN LOGIC ---
-    // Max value is generally the max of Bars (Income/Expense) or potentially a very high Surplus.
     const maxBarValue = max(data, d => Math.max(d.income, d.expense)) || 0;
     
-    // Default min/max
     let domainMin = 0;
     let domainMax = maxBarValue;
 
-    // If Surplus line is visible, it might go negative (deficit) or be higher than bars
     if (showSurplusLine) {
         const minSurplus = min(data, d => d.income - d.expense) || 0;
         const maxSurplus = max(data, d => d.income - d.expense) || 0;
@@ -312,7 +313,6 @@ export const ComboChart: React.FC<ChartProps> = ({
       .nice()
       .range([chartHeight, 0]);
 
-    // Align the zero of the Right Axis with the zero of the Left Axis
     const [yLeftMin, yLeftMax] = yLeft.domain();
     const maxRateData = max(data, d => d.savingsRate) || 0;
     const yRightMaxBase = Math.max(100, maxRateData);
@@ -328,8 +328,7 @@ export const ComboChart: React.FC<ChartProps> = ({
     const yRight = scaleLinear().domain([yRightMin, yRightMaxBase]).range([chartHeight, 0]);
 
     g.append("g").attr("class", "grid")
-     .call(axisLeft(yLeft).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
-     .selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
+     .call(axisLeft(yLeft).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
 
     const tooltip = select(containerRef.current).select(".tooltip");
     
@@ -338,7 +337,6 @@ export const ComboChart: React.FC<ChartProps> = ({
 
     const xSub = scaleBand().domain(['inc', 'exp']).range([0, x.bandwidth()]).padding(0.05);
 
-    // Bars (No separate mouse events)
     g.selectAll(".bar-inc")
       .data(data)
       .enter().append("rect")
@@ -359,7 +357,6 @@ export const ComboChart: React.FC<ChartProps> = ({
       .attr("fill", "#ef4444")
       .attr("rx", 2);
 
-    // Lines & Dots
     if (showSavingsRateLine) {
         const lineRate = d3Line<any>().x(d => (x(d.name) || 0) + x.bandwidth() / 2).y(d => yRight(Math.max(0, d.savingsRate))).curve(curveMonotoneX);
         g.append("path").datum(data).attr("fill", "none").attr("stroke", "#6366f1").attr("stroke-width", 2).attr("d", lineRate);
@@ -372,8 +369,6 @@ export const ComboChart: React.FC<ChartProps> = ({
         g.selectAll(".dot-balance").data(data).enter().append("circle").attr("cx", d => (x(d.name) || 0) + x.bandwidth() / 2).attr("cy", d => yLeft(d.income - d.expense)).attr("r", 3).attr("fill", "#0ea5e9").attr("stroke", "#fff").attr("stroke-width", 1.5);
     }
 
-    // Axes
-    // Calculate ticks to avoid overlap (heuristic: 50px per label)
     const maxLabels = Math.floor(chartWidth / 50);
     const interval = Math.ceil(data.length / maxLabels);
     const tickValues = data.map(d => d.name).filter((_, i) => i % interval === 0);
@@ -388,7 +383,6 @@ export const ComboChart: React.FC<ChartProps> = ({
         g.append("g").attr("transform", `translate(${chartWidth},0)`).call(axisRight(yRight).ticks(5).tickFormat(d => `${d}%`)).select(".domain").remove();
     }
 
-    // --- SHARED OVERLAY & TOOLTIP LOGIC ---
     const guideLine = g.append("line")
        .attr("stroke", "#94a3b8")
        .attr("stroke-width", 1)
@@ -457,12 +451,11 @@ export const ComboChart: React.FC<ChartProps> = ({
   );
 };
 
-// --- 7. Difference Chart (SHARED TOOLTIP) ---
+// --- 7. Difference Chart (Diverging Bar Chart for Balance) ---
 export const DifferenceChart: React.FC<ChartProps> = ({ 
     data, 
     height = 350, 
     isPrivateMode,
-    showSurplusLine = true,
     showSavingsRateLine = true
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -478,32 +471,74 @@ export const DifferenceChart: React.FC<ChartProps> = ({
     const chartHeight = height - margin.top - margin.bottom;
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const x = scalePoint().domain(data.map(d => d.name)).range([0, chartWidth]);
-    const yLeft = scaleLinear().domain([0, max(data, d => Math.max(d.income, d.expense)) || 0]).nice().range([chartHeight, 0]);
-    const yRight = scaleLinear().domain([0, 100]).range([chartHeight, 0]);
-
-    g.append("g").attr("class", "grid").call(axisLeft(yLeft).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
-
-    const lineIncome = d3Line<any>().x(d => x(d.name) || 0).y(d => yLeft(d.income)).curve(curveMonotoneX);
-    const lineExpense = d3Line<any>().x(d => x(d.name) || 0).y(d => yLeft(d.expense)).curve(curveMonotoneX);
+    const x = scaleBand().domain(data.map(d => d.name)).range([0, chartWidth]).padding(0.3);
     
-    // Areas
-    if (showSurplusLine) {
-        const area = d3Area<any>().x(d => x(d.name) || 0).y0(d => yLeft(d.income)).y1(d => yLeft(d.expense)).curve(curveMonotoneX);
-        const clipId = "clip-below-income-" + Math.random().toString(36).substr(2, 9);
-        g.append("clipPath").attr("id", clipId).append("path").datum(data).attr("d", d3Area<any>().x(d => x(d.name) || 0).y0(0).y1(d => yLeft(d.income)).curve(curveMonotoneX));
+    // Calculate Balance
+    const processedData = data.map(d => ({
+        ...d,
+        balance: d.income - d.expense
+    }));
 
-        g.append("path").datum(data).attr("d", area).attr("fill", "#fecaca").attr("stroke", "none");
-        g.append("path").datum(data).attr("d", area).attr("fill", "#bbf7d0").attr("stroke", "none");
-        g.append("path").datum(data).attr("d", area).attr("fill", "#fecaca").attr("clip-path", `url(#${clipId})`).attr("stroke", "none");
+    // Domain Calculation
+    const minBalance = min(processedData, d => d.balance) || 0;
+    const maxBalance = max(processedData, d => d.balance) || 0;
+
+    // Ensure 0 is in view and add padding
+    const yDomain = [Math.min(0, minBalance), Math.max(0, maxBalance)];
+    const yPadding = (yDomain[1] - yDomain[0]) * 0.1;
+    if (yPadding === 0 && yDomain[0] === 0 && yDomain[1] === 0) {
+        yDomain[0] = -100;
+        yDomain[1] = 100;
+    } else {
+        yDomain[0] -= yPadding;
+        yDomain[1] += yPadding;
     }
 
-    g.append("path").datum(data).attr("fill", "none").attr("stroke", "#10b981").attr("stroke-width", 2).attr("d", lineIncome);
-    g.append("path").datum(data).attr("fill", "none").attr("stroke", "#ef4444").attr("stroke-width", 2).attr("stroke-dasharray", "4,4").attr("d", lineExpense);
-    
+    const y = scaleLinear()
+      .domain(yDomain)
+      .nice()
+      .range([chartHeight, 0]);
+
+    // Right Axis for Savings Rate
+    const yRight = scaleLinear().domain([-50, 100]).range([chartHeight, 0]);
+    const maxRate = max(data, d => d.savingsRate) || 0;
+    const minRate = min(data, d => d.savingsRate) || 0;
+    yRight.domain([Math.min(0, minRate), Math.max(100, maxRate)]).nice();
+
+    g.append("g").attr("class", "grid")
+     .call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
+
+    // Zero Line
+    g.append("line")
+        .attr("x1", 0)
+        .attr("x2", chartWidth)
+        .attr("y1", y(0))
+        .attr("y2", y(0))
+        .attr("stroke", "#000")
+        .attr("stroke-width", 1);
+
+    const tooltip = select(containerRef.current).select(".tooltip");
+
+    // Bars
+    g.selectAll(".bar")
+      .data(processedData)
+      .enter().append("rect")
+      .attr("x", d => x(d.name) || 0)
+      .attr("y", d => d.balance >= 0 ? y(d.balance) : y(0))
+      .attr("width", x.bandwidth())
+      .attr("height", d => Math.abs(y(d.balance) - y(0)))
+      .attr("fill", d => d.balance >= 0 ? "#10b981" : "#ef4444")
+      .attr("rx", 3);
+
+    // Savings Rate Line
     if (showSavingsRateLine) {
-        const lineRate = d3Line<any>().x(d => x(d.name) || 0).y(d => yRight(Math.max(0, d.savingsRate))).curve(curveMonotoneX);
+        const lineRate = d3Line<any>()
+            .x(d => (x(d.name) || 0) + x.bandwidth() / 2)
+            .y(d => yRight(d.savingsRate))
+            .curve(curveMonotoneX);
+            
         g.append("path").datum(data).attr("fill", "none").attr("stroke", "#6366f1").attr("stroke-width", 2).attr("d", lineRate);
+        g.selectAll(".dot-rate").data(data).enter().append("circle").attr("cx", d => (x(d.name) || 0) + x.bandwidth() / 2).attr("cy", d => yRight(d.savingsRate)).attr("r", 3).attr("fill", "#6366f1").attr("stroke", "#fff").attr("stroke-width", 1.5);
     }
 
     // Axes
@@ -515,23 +550,13 @@ export const DifferenceChart: React.FC<ChartProps> = ({
         .call(axisBottom(x).tickValues(tickValues).tickSize(0))
         .select(".domain").remove();
     
-    g.append("g").call(axisLeft(yLeft).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
-    
+    g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
+
     if (showSavingsRateLine) {
         g.append("g").attr("transform", `translate(${chartWidth},0)`).call(axisRight(yRight).ticks(5).tickFormat(d => `${d}%`)).select(".domain").remove();
     }
 
-    const tooltip = select(containerRef.current).select(".tooltip");
-    
-    // Static dots (no mouse events)
-    if (showSurplusLine) {
-        g.selectAll(".dot-diff").data(data).enter().append("circle").attr("cx", d => x(d.name) || 0).attr("cy", d => yLeft(d.income)).attr("r", 4).attr("fill", "#10b981").attr("stroke", "#fff").attr("stroke-width", 1);
-    }
-    if (showSavingsRateLine) {
-        g.selectAll(".dot-rate").data(data).enter().append("circle").attr("cx", d => x(d.name) || 0).attr("cy", d => yRight(Math.max(0, d.savingsRate))).attr("r", 3).attr("fill", "#6366f1").attr("stroke", "#fff").attr("stroke-width", 1.5);
-    }
-
-    // --- SHARED OVERLAY & TOOLTIP LOGIC ---
+    // Overlay for Tooltip
     const guideLine = g.append("line")
        .attr("stroke", "#94a3b8")
        .attr("stroke-width", 1)
@@ -540,36 +565,25 @@ export const DifferenceChart: React.FC<ChartProps> = ({
        .style("opacity", 0);
 
     const overlayGroup = g.append("g").attr("class", "overlays");
-    
-    // For ScalePoint, we simulate bandwidth by calculating step
-    const step = x.step();
-    
     overlayGroup.selectAll(".overlay-rect")
-       .data(data)
+       .data(processedData)
        .enter().append("rect")
        .attr("class", "overlay-rect")
-       .attr("x", d => (x(d.name) || 0) - step / 2)
+       .attr("x", d => x(d.name) || 0)
        .attr("y", 0)
-       .attr("width", step)
+       .attr("width", x.bandwidth())
        .attr("height", chartHeight)
        .attr("fill", "transparent")
        .on("mouseenter", () => guideLine.style("opacity", 1))
        .on("mousemove", (event, d) => {
-           const centerX = x(d.name) || 0;
+           const centerX = (x(d.name) || 0) + x.bandwidth() / 2;
            guideLine.attr("x1", centerX).attr("x2", centerX);
-           
-           const surplus = d.income - d.expense;
            
            let htmlContent = `
              <div class="mb-2 border-b border-slate-100 pb-1"><strong>${d.name}</strong></div>
              <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-                <span class="text-slate-500">Przychód:</span> <span class="text-emerald-600 font-medium text-right">${formatValue(d.income, isPrivateMode)}</span>
-                <span class="text-slate-500">Wydatek:</span> <span class="text-red-500 font-medium text-right">${formatValue(d.expense, isPrivateMode)}</span>`;
-           
-           if (showSurplusLine) {
-               htmlContent += `
-                <span class="text-slate-500">Nadwyżka:</span> <span class="${surplus >= 0 ? 'text-emerald-600' : 'text-red-600'} font-medium text-right">${formatValue(surplus, isPrivateMode)}</span>`;
-           }
+                <span class="text-slate-500">Nadwyżka:</span> <span class="${d.balance >= 0 ? 'text-emerald-600' : 'text-red-600'} font-medium text-right">${formatValue(d.balance, isPrivateMode)}</span>
+           `;
            if (showSavingsRateLine) {
                htmlContent += `
                 <span class="text-slate-500">Oszczędność:</span> <span class="text-indigo-600 font-medium text-right">${d.savingsRate.toFixed(1)}%</span>`;
@@ -586,17 +600,15 @@ export const DifferenceChart: React.FC<ChartProps> = ({
            guideLine.style("opacity", 0);
        });
 
-  }, [data, width, height, isPrivateMode, showSurplusLine, showSavingsRateLine]);
+  }, [data, width, height, isPrivateMode, showSavingsRateLine]);
 
   return (
     <div ref={containerRef} className="relative w-full">
       <svg width="100%" height={height} className="overflow-visible" />
-      <div className="tooltip fixed opacity-0 bg-white p-3 border border-slate-200 shadow-xl rounded-lg text-xs pointer-events-none transition-opacity z-50 min-w-[180px]" />
+      <div className="tooltip fixed opacity-0 bg-white p-3 border border-slate-200 shadow-xl rounded-lg text-xs pointer-events-none transition-opacity z-50 min-w-[150px]" />
       <div className="flex flex-wrap gap-4 mt-2 justify-center">
-         {showSurplusLine && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#bbf7d0]"></div><span className="text-[10px] text-slate-500">Nadwyżka</span></div>}
-         {showSurplusLine && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#fecaca]"></div><span className="text-[10px] text-slate-500">Deficyt</span></div>}
-         <div className="flex items-center gap-1.5"><div className="w-4 h-0.5 bg-emerald-500"></div><span className="text-[10px] text-slate-500">Przychód</span></div>
-         <div className="flex items-center gap-1.5"><div className="w-4 h-0.5 bg-red-500 border-dashed"></div><span className="text-[10px] text-slate-500">Wydatek</span></div>
+         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#10b981]"></div><span className="text-[10px] text-slate-500">Nadwyżka (+)</span></div>
+         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#ef4444]"></div><span className="text-[10px] text-slate-500">Deficyt (-)</span></div>
          {showSavingsRateLine && <div className="flex items-center gap-1.5"><div className="w-4 h-0.5 bg-indigo-500"></div><span className="text-[10px] text-slate-500">Stopa oszcz. (%)</span></div>}
       </div>
     </div>
