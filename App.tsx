@@ -534,17 +534,20 @@ const App: React.FC = () => {
                 onLoadDemo={handleLoadDemoRequest}
               />
               
-              <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100">
-                <div className="flex justify-between items-center mb-4">
+              <div className="bg-white p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col h-full">
+                <div className="flex justify-between items-center mb-4 shrink-0">
                   <h3 className="font-semibold text-slate-800">Ostatnie transakcje</h3>
                   <button onClick={() => setActiveTab('history')} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">Zobacz wszystkie</button>
                 </div>
-                <TransactionList 
-                  transactions={transactions.slice(0, 5)} 
-                  categories={categories} 
-                  onDelete={handleDeleteTransaction}
-                  isPrivateMode={isPrivateMode}
-                />
+                <div className="flex-1 min-h-0">
+                  <TransactionList 
+                    transactions={transactions.slice(0, 5)} 
+                    categories={categories} 
+                    onDelete={handleDeleteTransaction}
+                    isPrivateMode={isPrivateMode}
+                    onLoadDemo={handleLoadDemoRequest}
+                  />
+                </div>
               </div>
             </div>
           </div>
