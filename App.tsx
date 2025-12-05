@@ -99,13 +99,15 @@ const App: React.FC = () => {
 
   // --- MIGRATION LOGIC ---
   // Uruchamia się raz po załadowaniu aplikacji.
+  // Służy do aktualizacji struktur danych użytkowników powracających ze starszych wersji aplikacji.
   useEffect(() => {
     const performMigration = () => {
        let updatedCategories = [...categories];
        let updatedTransactions = [...transactions];
        let hasChanges = false;
 
-       // MIGRACJA 1: Ustawienie flag isIncludedInSavings dla kategorii systemowych
+       // MIGRACJA 1 (v1.0.1): Ustawienie flag isIncludedInSavings
+       // Starsze wersje nie miały tej flagi, co powodowało błędne wyliczanie salda (traktowanie oszczędności jako koszt).
        updatedCategories = updatedCategories.map(c => {
           if (c.id === SYSTEM_IDS.SAVINGS || c.id === SYSTEM_IDS.INVESTMENTS) {
              if (c.isIncludedInSavings !== true) {
@@ -117,7 +119,8 @@ const App: React.FC = () => {
           return c;
        });
 
-       // MIGRACJA 2: Rozbicie starej kategorii 'cat_liabilities'
+       // MIGRACJA 2 (v1.0.2): Rozbicie starej kategorii 'cat_liabilities' (Zobowiązania i Inne)
+       // Nowa struktura wymaga osobnych kategorii na Kredyty, Ubezpieczenia i Przelewy Wewnętrzne.
        const oldLiabilityCat = updatedCategories.find(c => c.id === 'cat_liabilities');
        if (oldLiabilityCat) {
           console.log("Migrating 'Zobowiązania i Inne' structure...");
@@ -132,11 +135,13 @@ const App: React.FC = () => {
              }
           };
 
+          // Tworzenie nowych kategorii docelowych jeśli nie istnieją
           createCatIfMissing(SYSTEM_IDS.INTERNAL_TRANSFER, 'Przelew własny', '#0ea5e9', ['Inne']);
           createCatIfMissing('cat_insurance', 'Ubezpieczenia', '#db2777', ['Ubezpieczenie na życie', 'Ubezpieczenie podróżne', 'Ubezpieczenie auta', 'Ubezpieczenie domu', 'Inne']);
           createCatIfMissing('cat_loans', 'Zobowiązania', '#7f1d1d', ['Kredyt hipoteczny', 'Kredyt konsumpcyjny', 'Pożyczka', 'Inne']);
           createCatIfMissing(SYSTEM_IDS.OTHER_EXPENSE, 'Inne', '#94a3b8', ['Inne']);
 
+          // Helper do mapowania ID podkategorii
           const getTargetSubId = (catId: string, subNameToCheck: string) => {
              const cat = updatedCategories.find(c => c.id === catId);
              if (!cat) return '';
@@ -146,6 +151,7 @@ const App: React.FC = () => {
              return inne ? inne.id : (cat.subcategories[0]?.id || '');
           };
 
+          // Przepisanie transakcji ze starej kategorii do nowych na podstawie nazw podkategorii
           updatedTransactions = updatedTransactions.map(t => {
              if (t.categoryId === 'cat_liabilities') {
                 const oldSub = oldLiabilityCat.subcategories.find(s => s.id === t.subcategoryId);
@@ -173,6 +179,7 @@ const App: React.FC = () => {
              return t;
           });
 
+          // Usunięcie przestarzałej kategorii
           updatedCategories = updatedCategories.filter(c => c.id !== 'cat_liabilities');
        }
 

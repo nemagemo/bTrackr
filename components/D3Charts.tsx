@@ -83,6 +83,7 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
     const stack = d3Stack().keys(keys);
     const stackedData = stack(data);
 
+    // Using String(d.name) to ensure D3 ScaleBand receives strict string types
     const x = scaleBand().domain(data.map(d => String(d.name))).range([0, chartWidth]).padding(0.3);
     const y = scaleLinear().domain([0, max(stackedData, layer => max(layer, d => d[1])) || 0]).nice().range([chartHeight, 0]);
     const colorScale = scaleOrdinal().domain(keys).range(colors);
@@ -778,6 +779,15 @@ export const DayOfWeekChart: React.FC<ChartProps> = ({ data, height = 250, isPri
 };
 
 // --- 10. Waterfall Chart ---
+/**
+ * Wykres Kaskadowy (Waterfall) - wizualizuje jak składowe dodatnie i ujemne
+ * wpływają na wartość końcową (saldo).
+ * 
+ * Logika obliczeń:
+ * - 'income' (przychody) zwiększają słupek od zera (lub od poprzedniego poziomu)
+ * - 'expense' (wydatki) zmniejszają słupek od poziomu przychodów w dół
+ * - 'balance' (saldo) to słupek wynikowy, pokazujący co zostało
+ */
 export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPrivateMode }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { width } = useResizeObserver(containerRef);
@@ -793,6 +803,7 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
     // Prepare data for waterfall
+    // Obliczamy 'start' (góra słupka poprzedniego) i 'end' (koniec obecnego) dla każdego elementu
     let cumulative = 0;
     const processedData = data.map((d, i) => {
         const start = cumulative;
@@ -869,61 +880,21 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
        .enter().append("text")
        .text(d => formatValue(d.value, isPrivateMode))
        .attr("x", d => (x(String(d.name)) || 0) + x.bandwidth() / 2)
-       .attr("y", d => {
-           const barTop = y(Math.max(d.start, d.end)); // This is visually the top edge of the rect
-           const barBottom = y(Math.min(d.start, d.end)); // This is visually the bottom edge
-           const height = Math.abs(barTop - barBottom);
-           
-           // If bar is tall enough, center text inside. 
-           // Otherwise put OUTSIDE ABOVE the bar (barTop - 5) for both Income and Expense
-           // to ensure it doesn't overlap the bar below or the connector.
-           if (height > 20) return (barTop + barBottom) / 2;
-           return barTop - 5; 
-       })
-       .attr("dy", "0.35em")
+       .attr("y", d => y(Math.max(d.start, d.end)) - 5)
        .attr("text-anchor", "middle")
        .attr("font-size", "10px")
-       .attr("font-weight", "bold")
-       .attr("fill", "#1e293b") 
-       .style("pointer-events", "none");
+       .attr("fill", "#64748b");
 
-    // Connector Lines
-    const lineData: any[] = [];
-    for(let i=0; i<processedData.length-1; i++) {
-        const curr = processedData[i];
-        const next = processedData[i+1];
-        const yPos = y(curr.end);
-        
-        lineData.push({
-            x1: (x(String(curr.name)) || 0) + x.bandwidth(),
-            x2: (x(String(next.name)) || 0),
-            y: yPos
-        });
-    }
-
-    g.selectAll(".connector")
-        .data(lineData)
-        .enter().append("line")
-        .attr("x1", d => d.x1)
-        .attr("x2", d => d.x2)
-        .attr("y1", d => d.y)
-        .attr("y2", d => d.y)
-        .attr("stroke", "#94a3b8")
-        .attr("stroke-width", 1)
-        .attr("stroke-dasharray", "2,2");
-
-    // X Axis
     g.append("g").attr("transform", `translate(0,${chartHeight})`)
         .call(axisBottom(x).tickSize(0))
-        .select(".domain").remove();
+        .selectAll("text")
+        .attr("transform", "rotate(-45)")
+        .style("text-anchor", "end")
+        .attr("dx", "-.8em")
+        .attr("dy", ".15em");
         
-    // Rotate labels to show full names
-    g.selectAll(".tick text")
-        .attr("transform", "rotate(-25)")
-        .attr("text-anchor", "end")
-        .attr("dx", "-0.5em")
-        .attr("dy", "0.5em");
-
+    g.selectAll(".domain").remove();
+    
     g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
 
   }, [data, width, height, isPrivateMode]);
