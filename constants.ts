@@ -2,14 +2,6 @@
 import { CategoryItem, Transaction, TransactionType } from './types';
 
 /**
- * KONFIGURACJA GOOGLE DRIVE
- * Tutaj wklej swój Client ID z Google Cloud Console.
- * Instrukcja: Utwórz projekt -> API & Services -> Credentials -> OAuth 2.0 Client ID (Web application).
- * Dodaj 'http://localhost:5173' (lub swoją domenę produkcyjną) do "Authorized JavaScript origins".
- */
-export const GOOGLE_CLIENT_ID = 'WKLEJ_TUTAJ_SWOJ_CLIENT_ID';
-
-/**
  * SYSTEM_IDS
  * Te identyfikatory są używane w kodzie (`App.tsx`, wykresy) do specjalnego traktowania
  * niektórych kategorii w logice biznesowej, niezależnie od ich nazwy (która może być edytowana przez usera).

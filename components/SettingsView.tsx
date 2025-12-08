@@ -1,13 +1,12 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson, Database, Hash, Tag, Upload, Repeat, Calendar, AlertTriangle, Cloud, CloudRain, LogOut, Loader2, Save } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, Target, Download, FileJson, Database, Hash, Tag, Repeat, AlertTriangle } from 'lucide-react';
 import { CategoryItem, SubcategoryItem, TransactionType, Transaction, BackupData } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { TransferModal } from './TransferModal';
 import { CURRENCY_FORMATTER } from '../constants';
 import { Button } from './Button';
 import { useFinance } from '../context/FinanceContext';
-import { useGoogleDrive } from '../hooks/useGoogleDrive';
 
 interface SettingsViewProps {
   categories: CategoryItem[];
@@ -109,14 +108,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onAddTag,
   allTags = []
 }) => {
-  const { recurringTransactions, deleteRecurringTransaction, factoryReset, restoreBackup } = useFinance();
+  const { recurringTransactions, deleteRecurringTransaction, factoryReset, isPrivateMode } = useFinance();
   
-  // Google Drive Hook
-  const { 
-    isAuthenticated, isInitialized, isLoading: isDriveLoading, error: driveError, lastSyncTime,
-    handleLogin, handleLogout, uploadBackup, downloadBackup 
-  } = useGoogleDrive();
-
   const [activeTab, setActiveTab] = useState<TransactionType>(TransactionType.EXPENSE);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   
@@ -268,7 +261,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const generateBackupData = (): string => {
-    const isPrivateMode = JSON.parse(localStorage.getItem('btrackr_private_mode') || 'false');
+    // Use value from context, not direct localStorage, to ensure we get the migrated state
     const backup: BackupData = {
       version: 1,
       timestamp: new Date().toISOString(),
@@ -292,87 +285,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     document.body.removeChild(link);
   };
 
-  const handleDriveUpload = async () => {
-      const dataStr = generateBackupData();
-      await uploadBackup(dataStr);
-  };
-
-  const handleDriveDownload = async () => {
-      const data = await downloadBackup();
-      if (data) {
-          try {
-              const backup = JSON.parse(data);
-              restoreBackup(backup);
-              alert("Pomyślnie przywrócono dane z chmury!");
-          } catch (e) {
-              alert("Błąd podczas przetwarzania pliku kopii zapasowej.");
-          }
-      }
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
       
-      {/* Cloud Sync Section */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 w-full transition-colors">
-         <div className="flex justify-between items-start mb-2">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Cloud size={24} className="text-sky-500" /> Synchronizacja w Chmurze (Google Drive)
-            </h2>
-         </div>
-         <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-            Zapisz swoje dane bezpiecznie na prywatnym Dysku Google. Twoje dane pozostają Twoje.
-         </p>
-
-         {driveError && (
-             <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 p-3 rounded-lg text-sm mb-4">
-                 {driveError}
-             </div>
-         )}
-
-         {!isAuthenticated ? (
-             <div className="space-y-4">
-                <Button 
-                    onClick={handleLogin} 
-                    disabled={isDriveLoading} 
-                    className="w-full sm:w-auto self-start bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-white dark:border-slate-600 dark:hover:bg-slate-600"
-                >
-                    {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <Cloud size={18} />}
-                    Połącz z Google Drive
-                </Button>
-             </div>
-         ) : (
-             <div className="space-y-4">
-                 <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
-                     <div className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300 font-medium">
-                         <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                         Połączono z Google Drive
-                     </div>
-                     <button onClick={handleLogout} className="text-xs text-slate-500 hover:text-red-500 flex items-center gap-1 transition-colors">
-                         <LogOut size={12} /> Wyloguj
-                     </button>
-                 </div>
-
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                     <Button onClick={handleDriveUpload} disabled={isDriveLoading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                        {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18} />}
-                        Wyślij Backup do Chmury
-                     </Button>
-                     <Button onClick={handleDriveDownload} disabled={isDriveLoading} variant="secondary">
-                        {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <CloudRain size={18} />}
-                        Przywróć z Chmury
-                     </Button>
-                 </div>
-                 
-                 {lastSyncTime && (
-                     <p className="text-xs text-slate-400 text-center">
-                         Ostatnia synchronizacja: {lastSyncTime}
-                     </p>
-                 )}
-             </div>
-         )}
-      </div>
-
       {/* Manual Backup Section */}
       <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-slate-700 dark:to-slate-800 p-5 rounded-2xl shadow-sm text-white">
         <div className="flex justify-between items-center gap-4 mb-4">
