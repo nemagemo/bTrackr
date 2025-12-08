@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson, Database, Hash, Tag, Upload, Repeat, Calendar } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson, Database, Hash, Tag, Upload, Repeat, Calendar, AlertTriangle } from 'lucide-react';
 import { CategoryItem, SubcategoryItem, TransactionType, Transaction, BackupData } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { TransferModal } from './TransferModal';
@@ -108,7 +108,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onAddTag,
   allTags = []
 }) => {
-  const { recurringTransactions, deleteRecurringTransaction } = useFinance();
+  const { recurringTransactions, deleteRecurringTransaction, factoryReset } = useFinance();
 
   const [activeTab, setActiveTab] = useState<TransactionType>(TransactionType.EXPENSE);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -249,6 +249,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         message: 'Czy na pewno chcesz usunąć ten cykl? Historia utworzonych transakcji pozostanie bez zmian.',
         action: () => deleteRecurringTransaction(id)
     });
+  };
+
+  const handleFactoryResetConfirm = () => {
+      setConfirmModal({
+          isOpen: true,
+          title: 'Reset do ustawień fabrycznych',
+          message: 'UWAGA: Ta operacja nieodwracalnie usunie WSZYSTKIE Twoje dane (transakcje, kategorie, ustawienia). Aplikacja zostanie przywrócona do stanu początkowego. Czy na pewno chcesz kontynuować?',
+          action: factoryReset
+      });
   };
 
   const handleExportBackup = () => {
@@ -669,6 +678,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <Plus size={16} /> Dodaj nowy tag
               </button>
             )}
+        </div>
+
+        {/* Danger Zone */}
+        <div className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 p-5 rounded-2xl">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h3 className="font-bold text-red-800 dark:text-red-400 flex items-center gap-2">
+                        <AlertTriangle size={18} /> Strefa Niebezpieczna
+                    </h3>
+                    <p className="text-xs text-red-600 dark:text-red-300 mt-1">
+                        Działania tutaj są nieodwracalne.
+                    </p>
+                </div>
+                <Button 
+                    variant="danger" 
+                    onClick={handleFactoryResetConfirm}
+                    className="w-full sm:w-auto bg-white hover:bg-red-50 text-red-600 border border-red-200 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/50"
+                >
+                    Resetuj aplikację
+                </Button>
+            </div>
         </div>
       </div>
       

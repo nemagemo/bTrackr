@@ -6,6 +6,16 @@ import { Transaction, TransactionType, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 import { PeriodType } from '../hooks/useAnalysisData';
 
+// Helper to ensure consistent YYYY-MM-DD format using Local Time
+// This prevents mismatches where D3 generates local midnight (00:00) 
+// and toISOString() shifts it to the previous day in UTC.
+const formatDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface YearlyHeatmapProps {
   year: number;
   data: Map<string, number>;
@@ -101,23 +111,21 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
       })
       .attr("fill", (d: any) => {
         const date = d as Date;
-        const dateStr = date.toISOString().split('T')[0];
+        // Use consistent formatting
+        const dateStr = formatDateKey(date);
         const val = data.get(dateStr);
-        // Special case: if val exists (even 0, though map usually has >0), use scale.
-        // If not in map, use empty color.
-        return (typeof val === 'number') ? colorScale(val) : emptyDayColor; 
+        return (typeof val === 'number' && val > 0) ? colorScale(val) : emptyDayColor; 
       })
       .attr("rx", Math.max(1, cellSize / 5)) // Dynamic radius
       .attr("stroke", emptyDayStroke) // border for empty days
       .attr("stroke-width", (d: any) => {
          const date = d as Date;
-         const dateStr = date.toISOString().split('T')[0];
-         return data.has(dateStr) ? 0 : 1;
+         const dateStr = formatDateKey(date);
+         return data.has(dateStr) && (data.get(dateStr) || 0) > 0 ? 0 : 1;
       })
       .on("mouseenter", (event, d: any) => {
         const date = d as Date;
-        // Construct lookup key
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = formatDateKey(date);
         const val = data.get(dateStr) || 0;
         
         // Don't show tooltip for empty days unless you want to
@@ -146,12 +154,12 @@ const YearlyHeatmap: React.FC<YearlyHeatmapProps> = ({ year, data, width, custom
          tooltip.style("opacity", 0).style("display", "none");
          select(event.currentTarget).attr("stroke", (d: any) => {
             const date = d as Date;
-            const dateStr = date.toISOString().split('T')[0];
-            return data.has(dateStr) ? null : emptyDayStroke;
+            const dateStr = formatDateKey(date);
+            return (data.get(dateStr) || 0) > 0 ? null : emptyDayStroke;
          }).attr("stroke-width", (d: any) => {
             const date = d as Date;
-            const dateStr = date.toISOString().split('T')[0];
-            return data.has(dateStr) ? 0 : 1;
+            const dateStr = formatDateKey(date);
+            return (data.get(dateStr) || 0) > 0 ? 0 : 1;
          });
       });
 
@@ -243,10 +251,15 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        setWidth(containerRef.current.offsetWidth);
+        // Use clientWidth to account for padding/scrollbars correctly, fallback to offsetWidth
+        const newWidth = containerRef.current.clientWidth || containerRef.current.offsetWidth;
+        if (newWidth > 0) setWidth(newWidth);
       }
     };
     updateWidth();
+    // Use a small timeout to ensure layout is settled in some cases
+    setTimeout(updateWidth, 100); 
+    
     const observer = new ResizeObserver(updateWidth);
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
@@ -289,7 +302,8 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
 
         const dailyTotals = new Map<string, number>();
         expenses.forEach(t => {
-           const dateStr = new Date(t.date).toISOString().split('T')[0];
+           // Use helper to be consistent with rendering loop
+           const dateStr = formatDateKey(new Date(t.date));
            dailyTotals.set(dateStr, (dailyTotals.get(dateStr) || 0) + t.amount);
         });
         map.set(y, dailyTotals);
