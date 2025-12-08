@@ -2,9 +2,9 @@
 /**
  * Definicje typów dla całej aplikacji bTrackr.
  * 
- * WAŻNE DLA AI:
- * Przy dodawaniu nowych funkcjonalności, upewnij się, że zmiany w tych interfejsach
- * są odzwierciedlone w `constants.ts` (DEFAULT_CATEGORIES) oraz w logice migracji w `App.tsx`.
+ * WAŻNE:
+ * Zmiany w strukturze danych (CategoryItem, Transaction) mogą wymagać
+ * aktualizacji logiki migracji w `hooks/useDataMigration.ts` oraz obsługi kopii zapasowych.
  */
 
 export enum TransactionType {
@@ -28,21 +28,20 @@ export interface CategoryItem {
   type: TransactionType;
   color: string;
   /**
-   * @deprecated Używane w starszych wersjach do blokowania edycji. Obecnie false dla wszystkich.
-   * Logika systemowa opiera się teraz na `SYSTEM_IDS` w constants.ts.
+   * Flaga systemowa (Legacy). 
+   * Obecnie logika systemowa opiera się głównie na stałych `SYSTEM_IDS` w constants.ts.
    */
   isSystem: boolean; 
   /**
-   * Kluczowa flaga dla logiki finansowej.
+   * Flaga "Oszczędności / Inwestycje".
    * Jeśli true: 
-   * 1. Transakcje NIE są wliczane do ogólnej sumy 'Wydatków' (totalExpense).
-   * 2. Transakcje NIE pomniejszają 'Dostępnych środków' (są traktowane jako transfer majątku).
-   * 3. Służą do obliczania licznika 'Stopy Oszczędności'.
+   * 1. Transakcje są traktowane jako transfer majątku (nie pomniejszają salda operacyjnego).
+   * 2. Są wyłączone z wykresów wydatków konsumpcyjnych.
+   * 3. Służą do obliczania Stopy Oszczędności (Savings Rate).
    */
   isIncludedInSavings?: boolean; 
   /**
-   * Użytkownik może zdefiniować miesięczny limit dla tej kategorii.
-   * Używane w komponencie `BudgetPulse`.
+   * Opcjonalny miesięczny limit budżetowy dla tej kategorii.
    */
   budgetLimit?: number; 
   subcategories: SubcategoryItem[];
@@ -50,7 +49,7 @@ export interface CategoryItem {
 
 /**
  * Szablon transakcji cyklicznej.
- * Nie wpływa na saldo, służy do generowania realnych transakcji.
+ * Służy do automatycznego generowania transakcji (pole `autoPay`) lub przypominania o płatnościach.
  */
 export interface RecurringTransaction {
   id: string;
@@ -61,7 +60,7 @@ export interface RecurringTransaction {
   subcategoryId?: string;
   frequency: Frequency;
   nextDueDate: string; // ISO Date (YYYY-MM-DD)
-  autoPay: boolean; // True = automat (Netflix), False = przypomnienie (Prąd)
+  autoPay: boolean; // True = automat (tworzy wpis sam), False = wymaga zatwierdzenia
   tags?: string[];
 }
 
@@ -73,21 +72,26 @@ export interface Transaction {
   amount: number;
   description: string;
   type: TransactionType;
-  categoryId: string; // Odnosi się do CategoryItem.id
-  subcategoryId?: string; // Odnosi się do SubcategoryItem.id
-  date: string; // Format ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ). UWAGA: Zalecane ustawianie godziny na 12:00, aby uniknąć przesunięć stref czasowych.
-  tags?: string[]; // Niezależny system tagowania (np. #wakacje, #projektX)
-  isRecurring?: boolean; // Czy transakcja powstała z szablonu cyklicznego
+  categoryId: string; // Referencja do CategoryItem.id
+  subcategoryId?: string; // Referencja do SubcategoryItem.id
+  /**
+   * Data w formacie ISO 8601 (YYYY-MM-DDTHH:mm:ss.sssZ).
+   * UWAGA: Aplikacja ustawia godzinę na 12:00 (noon), aby uniknąć przesunięć
+   * daty wynikających ze stref czasowych przy konwersji UTC <-> Local.
+   */
+  date: string; 
+  tags?: string[]; // System tagowania (np. #wakacje)
+  isRecurring?: boolean; // Flaga oznaczająca, że transakcja pochodzi z automatu
 }
 
 /**
- * Obiekt podsumowania używany w Dashboardzie.
+ * Obiekt podsumowania finansowego (agregat).
  */
 export interface FinancialSummary {
   totalIncome: number;
-  totalExpense: number; // Suma wydatków KONSUMPCYJNYCH (bez oszczędności/inwestycji)
-  balance: number;      // Income - TotalExpense (Consumption).
-  savingsAmount: number; // Kwota wydana na kategorie oznaczone jako isIncludedInSavings
+  totalExpense: number; // Wydatki konsumpcyjne (bez oszczędności)
+  balance: number;      // Income - TotalExpense
+  savingsAmount: number; // Suma przepływów na kategorie oszczędnościowe
 }
 
 export interface ChartDataPoint {
@@ -98,14 +102,14 @@ export interface ChartDataPoint {
 
 /**
  * Struktura pliku eksportu/importu (JSON).
- * Służy do pełnego backupu stanu aplikacji.
+ * Zawiera pełny zrzut bazy danych Dexie.
  */
 export interface BackupData {
   version: number;
   timestamp: string;
   categories: CategoryItem[];
   transactions: Transaction[];
-  recurringTransactions?: RecurringTransaction[]; // New field
+  recurringTransactions?: RecurringTransaction[];
   settings: {
     isPrivateMode: boolean;
   };

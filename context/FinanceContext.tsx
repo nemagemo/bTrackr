@@ -64,6 +64,14 @@ interface FinanceContextType {
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
+/**
+ * Provider danych finansowych.
+ * 
+ * Architektura:
+ * - Źródło prawdy: IndexedDB (za pośrednictwem biblioteki Dexie.js).
+ * - Reaktywność: Hook `useLiveQuery` automatycznie odświeża komponenty, gdy dane w bazie ulegną zmianie.
+ * - Logika: Rozdzielona na mniejsze hooki (useRecurringTransactions, useDataImportExport).
+ */
 export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // --- IndexedDB Live Queries (Core Data) ---
   const transactions = useLiveQuery(() => db.transactions.toArray()) || [];
@@ -91,7 +99,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   const isPrivateMode = useMemo(() => settingsArray.find(s => s.key === 'isPrivateMode')?.value || false, [settingsArray]);
   const theme = useMemo<Theme>(() => settingsArray.find(s => s.key === 'theme')?.value || 'light', [settingsArray]);
 
-  // --- Initial Migration ---
+  // --- Initial Migration (LocalStorage -> IndexedDB) ---
   useEffect(() => {
     migrateFromLocalStorage();
   }, []);
@@ -119,7 +127,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
     db.settings.put({ key: 'savedTags', value: tags });
   };
 
-  // --- Derived State ---
+  // --- Derived State (Memoized Calculations) ---
   const allTags = useMemo(() => {
      const tags = new Set<string>(savedTags);
      transactions.forEach(t => t.tags?.forEach(tag => tags.add(tag)));
@@ -148,7 +156,7 @@ export const FinanceProvider: React.FC<{ children: ReactNode }> = ({ children })
   summary.balance = summary.totalIncome - summary.totalExpense;
   const operationalBalance = summary.totalIncome - summary.totalExpense - summary.savingsAmount;
 
-  // --- Core CRUD Actions ---
+  // --- Core CRUD Actions (Direct DB Operations) ---
 
   const addTransaction = async (newTx: Omit<Transaction, 'id'>) => {
     const subId = await ensureSubcategory(newTx.categoryId, newTx.subcategoryId);

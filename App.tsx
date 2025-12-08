@@ -14,8 +14,14 @@ import { Layout, Tab } from './components/Layout';
 import { FinanceProvider, useFinance } from './context/FinanceContext';
 
 /**
- * Inner App Component holding the UI Logic.
- * Needs to be inside FinanceProvider to use the hook.
+ * Główny kontroler aplikacji (Controller).
+ * 
+ * Odpowiedzialności:
+ * 1. Zarządzanie routingiem (activeTab).
+ * 2. Zarządzanie globalnymi oknami modalnymi (Import, Edycja, Potwierdzenia).
+ * 3. Orkiestracja przepływu danych między Contextem a Widokami.
+ * 
+ * Warstwa wizualna (nagłówek, nawigacja) jest wydzielona do komponentu `Layout`.
  */
 const AppContent: React.FC = () => {
   // Global State from Context

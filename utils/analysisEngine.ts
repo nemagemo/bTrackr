@@ -12,6 +12,13 @@ export interface AnalysisPayload {
     yearAggregation: 'MONTHLY' | 'QUARTERLY';
 }
 
+/**
+ * Silnik obliczeniowy dla widoku analizy.
+ * 
+ * Funkcja jest przystosowana do działania w Web Workerze, aby nie blokować
+ * głównego wątku aplikacji podczas przetwarzania tysięcy transakcji.
+ * Generuje dane dla wszystkich wykresów (buckets, waterfall, stats) w jednym przebiegu.
+ */
 export const calculateAnalysis = (payload: AnalysisPayload) => {
     const { 
         transactions, categories, selectedYear, periodType, 
