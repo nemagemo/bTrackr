@@ -1,12 +1,14 @@
 
-import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson, Database, Hash, Tag, Upload, Repeat, Calendar, AlertTriangle } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Plus, Trash2, Edit2, Check, X, ChevronRight, ChevronDown, PiggyBank, Target, Download, FileJson, Database, Hash, Tag, Upload, Repeat, Calendar, AlertTriangle, Cloud, CloudRain, LogOut, Loader2, Save } from 'lucide-react';
 import { CategoryItem, SubcategoryItem, TransactionType, Transaction, BackupData } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { TransferModal } from './TransferModal';
 import { CURRENCY_FORMATTER } from '../constants';
 import { Button } from './Button';
 import { useFinance } from '../context/FinanceContext';
+import { useGoogleDrive } from '../hooks/useGoogleDrive';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 interface SettingsViewProps {
   categories: CategoryItem[];
@@ -108,7 +110,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onAddTag,
   allTags = []
 }) => {
-  const { recurringTransactions, deleteRecurringTransaction, factoryReset } = useFinance();
+  const { recurringTransactions, deleteRecurringTransaction, factoryReset, restoreBackup } = useFinance();
+  
+  // Google Drive Hook
+  const { 
+    isAuthenticated, isInitialized, isLoading: isDriveLoading, error: driveError, lastSyncTime,
+    initClient, handleLogin, handleLogout, uploadBackup, downloadBackup 
+  } = useGoogleDrive();
+
+  // Store Client ID locally
+  const [googleClientId, setGoogleClientId] = useLocalStorage('btrackr_google_client_id', '');
+  const [showClientIdInput, setShowClientIdInput] = useState(false);
+
+  useEffect(() => {
+    if (googleClientId) {
+        initClient(googleClientId);
+    }
+  }, []); // Run once on mount if ID exists, or when ID is saved
+
+  const handleSaveClientId = () => {
+      if (googleClientId) {
+          initClient(googleClientId);
+          setShowClientIdInput(false);
+      }
+  };
 
   const [activeTab, setActiveTab] = useState<TransactionType>(TransactionType.EXPENSE);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -260,21 +285,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       });
   };
 
-  const handleExportBackup = () => {
+  const generateBackupData = (): string => {
     const isPrivateMode = JSON.parse(localStorage.getItem('btrackr_private_mode') || 'false');
-    
     const backup: BackupData = {
       version: 1,
       timestamp: new Date().toISOString(),
       categories: categories,
       transactions: transactions,
       recurringTransactions: recurringTransactions,
-      settings: {
-        isPrivateMode: isPrivateMode
-      }
+      settings: { isPrivateMode: isPrivateMode }
     };
+    return JSON.stringify(backup, null, 2);
+  };
 
-    const dataStr = JSON.stringify(backup, null, 2);
+  const handleExportBackup = () => {
+    const dataStr = generateBackupData();
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -285,18 +310,136 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     document.body.removeChild(link);
   };
 
+  const handleDriveUpload = async () => {
+      const dataStr = generateBackupData();
+      await uploadBackup(dataStr);
+  };
+
+  const handleDriveDownload = async () => {
+      const data = await downloadBackup();
+      if (data) {
+          try {
+              const backup = JSON.parse(data);
+              restoreBackup(backup);
+              alert("Pomyślnie przywrócono dane z chmury!");
+          } catch (e) {
+              alert("Błąd podczas przetwarzania pliku kopii zapasowej.");
+          }
+      }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       
-      {/* Kopia Zapasowa i Dane Section */}
+      {/* Cloud Sync Section */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 w-full transition-colors">
+         <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+            <Cloud size={24} className="text-sky-500" /> Synchronizacja w Chmurze (Google Drive)
+         </h2>
+         <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+            Zapisz swoje dane bezpiecznie na prywatnym Dysku Google. Twoje dane pozostają Twoje.
+         </p>
+
+         {/* Configuration Alert if missing Client ID */}
+         {!isInitialized && !googleClientId && (
+             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 mb-4">
+                 <div className="flex gap-2 items-start">
+                     <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 mt-0.5" />
+                     <div className="flex-1">
+                         <h4 className="text-sm font-bold text-amber-800 dark:text-amber-300">Wymagana konfiguracja</h4>
+                         <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                             Aby korzystać z synchronizacji Google, musisz podać własne <strong>Client ID</strong> z Google Cloud Console (projekt z włączonym Google Drive API).
+                         </p>
+                         <button 
+                            onClick={() => setShowClientIdInput(!showClientIdInput)}
+                            className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-2 hover:underline"
+                         >
+                            {showClientIdInput ? 'Ukryj konfigurację' : 'Skonfiguruj Client ID'}
+                         </button>
+                     </div>
+                 </div>
+             </div>
+         )}
+
+         {/* Client ID Input */}
+         {(showClientIdInput || (!googleClientId && !isInitialized)) && (
+             <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">Google Client ID</label>
+                 <div className="flex gap-2">
+                     <input 
+                        type="text" 
+                        value={googleClientId}
+                        onChange={(e) => setGoogleClientId(e.target.value)}
+                        placeholder="np. 123456789-abc.apps.googleusercontent.com"
+                        className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                     />
+                     <Button onClick={handleSaveClientId} disabled={!googleClientId}>Zapisz</Button>
+                 </div>
+                 <p className="text-[10px] text-slate-400 mt-2">ID jest zapisywane tylko w pamięci lokalnej przeglądarki.</p>
+             </div>
+         )}
+
+         {/* Drive Actions */}
+         {googleClientId && (
+             <div className="flex flex-col gap-4">
+                 {driveError && (
+                     <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 p-3 rounded-lg text-sm mb-2">
+                         {driveError}
+                     </div>
+                 )}
+
+                 {!isAuthenticated ? (
+                     <Button 
+                        onClick={handleLogin} 
+                        disabled={isDriveLoading || !isInitialized} 
+                        className="w-full sm:w-auto self-start bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-white dark:border-slate-600 dark:hover:bg-slate-600"
+                     >
+                        {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <Cloud size={18} />}
+                        Połącz z Google Drive
+                     </Button>
+                 ) : (
+                     <div className="space-y-4">
+                         <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
+                             <div className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300 font-medium">
+                                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                 Połączono z Google Drive
+                             </div>
+                             <button onClick={handleLogout} className="text-xs text-slate-500 hover:text-red-500 flex items-center gap-1 transition-colors">
+                                 <LogOut size={12} /> Wyloguj
+                             </button>
+                         </div>
+
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                             <Button onClick={handleDriveUpload} disabled={isDriveLoading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                                {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18} />}
+                                Wyślij Backup do Chmury
+                             </Button>
+                             <Button onClick={handleDriveDownload} disabled={isDriveLoading} variant="secondary">
+                                {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <CloudRain size={18} />}
+                                Przywróć z Chmury
+                             </Button>
+                         </div>
+                         
+                         {lastSyncTime && (
+                             <p className="text-xs text-slate-400 text-center">
+                                 Ostatnia synchronizacja: {lastSyncTime}
+                             </p>
+                         )}
+                     </div>
+                 )}
+             </div>
+         )}
+      </div>
+
+      {/* Manual Backup Section */}
       <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-slate-700 dark:to-slate-800 p-5 rounded-2xl shadow-sm text-white">
         <div className="flex justify-between items-center gap-4 mb-4">
            <div>
              <h2 className="text-lg font-bold flex items-center gap-2">
-               <Database size={20} className="text-indigo-400" /> Kopia Zapasowa i Dane
+               <Database size={20} className="text-indigo-400" /> Kopia Lokalna (Plik)
              </h2>
              <p className="text-xs text-slate-300 mt-1">
-               Zarządzaj swoimi danymi: importuj historię lub wykonaj backup.
+               Tradycyjny eksport/import do pliku JSON.
              </p>
            </div>
         </div>
@@ -309,11 +452,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                  className="bg-white/10 !text-white border-white/20 hover:bg-white/20 py-3 px-4 flex-row justify-start items-center gap-4 h-auto group"
               >
                  <div className="p-2 bg-indigo-500/20 rounded-lg shrink-0">
-                    <Upload size={20} className="text-indigo-300 group-hover:text-indigo-200" />
+                    <FileJson size={20} className="text-indigo-300 group-hover:text-indigo-200" />
                  </div>
                  <div className="text-left">
-                    <span className="block font-bold text-sm text-white">Importuj Dane</span>
-                    <span className="block text-[10px] font-normal text-slate-300">CSV z banku lub JSON</span>
+                    <span className="block font-bold text-sm text-white">Importuj Plik</span>
+                    <span className="block text-[10px] font-normal text-slate-300">CSV lub JSON</span>
                  </div>
               </Button>
            )}
@@ -327,8 +470,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                  <Download size={20} className="text-emerald-300 group-hover:text-emerald-200" />
               </div>
               <div className="text-left">
-                 <span className="block font-bold text-sm text-white">Eksportuj Backup</span>
-                 <span className="block text-[10px] font-normal text-slate-300">Pełna kopia (JSON)</span>
+                 <span className="block font-bold text-sm text-white">Pobierz Backup</span>
+                 <span className="block text-[10px] font-normal text-slate-300">Zapisz na dysku</span>
               </div>
            </Button>
         </div>
@@ -336,7 +479,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <div className="flex flex-col gap-6">
         
-        {/* NEW: Zarządzanie Stałymi */}
+        {/* Zarządzanie Stałymi */}
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] dark:shadow-none border border-slate-100 dark:border-slate-700 w-full transition-colors">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                 Zarządzanie Stałymi <span className="text-sm font-normal text-slate-400">({recurringTransactions.length})</span>
