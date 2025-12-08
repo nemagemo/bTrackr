@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { select, stack as d3Stack, scaleBand, scaleLinear, scaleOrdinal, axisLeft, axisBottom, max } from 'd3';
+import * as d3 from 'd3';
 import { useChartDimensions } from '../../hooks/useChartDimensions';
 import { ChartProps, formatValue } from './types';
 
@@ -9,7 +9,7 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
 
   useEffect(() => {
     if (!width || !data || !data.length) return;
-    const svg = select(ref.current).select('svg');
+    const svg = d3.select(ref.current).select('svg');
     svg.selectAll("*").remove();
 
     const margin = { top: 20, right: 20, bottom: 30, left: 50 };
@@ -17,12 +17,12 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
     const chartHeight = height - margin.top - margin.bottom;
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const stack = d3Stack().keys(keys);
+    const stack = d3.stack().keys(keys);
     const stackedData = stack(data);
 
-    const x = scaleBand().domain(data.map(d => String(d.name))).range([0, chartWidth]).padding(0.3);
-    const y = scaleLinear().domain([0, max(stackedData, layer => max(layer, d => d[1])) || 0]).nice().range([chartHeight, 0]);
-    const colorScale = scaleOrdinal().domain(keys).range(colors);
+    const x = d3.scaleBand().domain(data.map(d => String(d.name))).range([0, chartWidth]).padding(0.3);
+    const y = d3.scaleLinear().domain([0, d3.max(stackedData, layer => d3.max(layer, d => d[1])) || 0]).nice().range([chartHeight, 0]);
+    const colorScale = d3.scaleOrdinal().domain(keys).range(colors);
 
     // Dark Mode colors
     const gridColor = isDarkMode ? "#334155" : "#e2e8f0";
@@ -33,12 +33,12 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
 
     g.append("g")
      .attr("class", "grid")
-     .call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
+     .call(d3.axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
      .selectAll("line")
      .attr("stroke", gridColor)
      .attr("stroke-dasharray", "3,3");
 
-    const tooltip = select(ref.current).select(".tooltip");
+    const tooltip = d3.select(ref.current).select(".tooltip");
     
     // Apply dark mode styles to tooltip container dynamically
     tooltip.style("background-color", tooltipBg)
@@ -52,7 +52,7 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
       .attr("fill", d => colorScale(d.key) as string)
       .each(function(series) {
           const seriesKey = series.key;
-          select(this).selectAll("rect")
+          d3.select(this).selectAll("rect")
             .data(series)
             .enter().append("rect")
             .attr("x", d => x(String(d.data.name)) || 0)
@@ -85,18 +85,18 @@ export const StackedBarChart: React.FC<ChartProps & { keys: string[] }> = ({ dat
     const tickValues = data.map(d => String(d.name)).filter((_, i) => i % interval === 0);
 
     const xAxis = g.append("g").attr("transform", `translate(0,${chartHeight})`)
-        .call(axisBottom(x).tickValues(tickValues).tickSize(0));
+        .call(d3.axisBottom(x).tickValues(tickValues).tickSize(0));
     xAxis.select(".domain").remove();
     xAxis.selectAll("text").attr("fill", textColor);
     
-    const yAxis = g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`));
+    const yAxis = g.append("g").call(d3.axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`));
     yAxis.select(".domain").remove();
     yAxis.selectAll("text").attr("fill", textColor);
     yAxis.selectAll("line").attr("stroke", gridColor); // Ticks
 
   }, [data, width, height, keys, colors, isPrivateMode, isDarkMode]);
 
-  const colorScale = scaleOrdinal().domain(keys).range(colors);
+  const colorScale = d3.scaleOrdinal().domain(keys).range(colors);
 
   return (
     <div ref={ref} className="relative w-full">

@@ -293,11 +293,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="flex justify-between items-center gap-4 mb-4">
            <div>
              <h2 className="text-lg font-bold flex items-center gap-2">
-               <Database size={20} className="text-indigo-400" /> Kopia Lokalna (Plik)
+               <Database size={20} className="text-indigo-400" /> Import/Eksport danych
              </h2>
-             <p className="text-xs text-slate-300 mt-1">
-               Tradycyjny eksport/import do pliku JSON.
-             </p>
            </div>
         </div>
 
@@ -328,7 +325,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
               <div className="text-left">
                  <span className="block font-bold text-sm text-white">Pobierz Backup</span>
-                 <span className="block text-[10px] font-normal text-slate-300">Zapisz na dysku</span>
+                 <span className="block text-[10px] font-normal text-slate-300">Zapisz na dysku (JSON)</span>
               </div>
            </Button>
         </div>
@@ -336,10 +333,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <div className="flex flex-col gap-6">
         
-        {/* Zarządzanie Stałymi */}
+        {/* Zarządzanie Stałymi Przelewami */}
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] dark:shadow-none border border-slate-100 dark:border-slate-700 w-full transition-colors">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                Zarządzanie Stałymi <span className="text-sm font-normal text-slate-400">({recurringTransactions.length})</span>
+                Zarządzanie Stałymi Przelewami<span className="text-sm font-normal text-slate-400">({recurringTransactions.length})</span>
             </h2>
 
             {recurringTransactions.length === 0 ? (

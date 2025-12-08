@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { select, scaleBand, scaleLinear, axisLeft, axisBottom, max, min } from 'd3';
+import * as d3 from 'd3';
 import { useChartDimensions } from '../../hooks/useChartDimensions';
 import { ChartProps, formatValue } from './types';
 
@@ -9,7 +9,7 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
 
   useEffect(() => {
     if (!width || !data || !data.length) return;
-    const svg = select(ref.current).select('svg');
+    const svg = d3.select(ref.current).select('svg');
     svg.selectAll("*").remove();
 
     const margin = { top: 30, right: 30, bottom: 70, left: 60 }; 
@@ -45,24 +45,24 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
         return { ...d, start, end, value: Math.abs(d.value), rawValue: d.value, isTotal: false };
     });
 
-    const x = scaleBand()
+    const x = d3.scaleBand()
       .domain(processedData.map(d => String(d.name)))
       .range([0, chartWidth])
       .padding(0.3);
 
-    const maxVal = max(processedData, d => Math.max(d.start, d.end)) || 0;
-    const minVal = min(processedData, d => Math.min(d.start, d.end)) || 0;
+    const maxVal = d3.max(processedData, d => Math.max(d.start, d.end)) || 0;
+    const minVal = d3.min(processedData, d => Math.min(d.start, d.end)) || 0;
     
-    const y = scaleLinear()
+    const y = d3.scaleLinear()
       .domain([Math.min(0, minVal), Math.max(0, maxVal)])
       .nice()
       .range([chartHeight, 0]);
 
     g.append("g").attr("class", "grid")
-     .call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
+     .call(d3.axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
      .selectAll("line").attr("stroke", gridColor).attr("stroke-dasharray", "3,3");
 
-    const tooltip = select(ref.current).select(".tooltip");
+    const tooltip = d3.select(ref.current).select(".tooltip");
     tooltip.style("background-color", tooltipBg).style("border-color", tooltipBorder).style("color", tooltipText);
 
     g.selectAll(".bar")
@@ -105,7 +105,7 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
        .attr("fill", textColor);
 
     const xAxis = g.append("g").attr("transform", `translate(0,${chartHeight})`)
-        .call(axisBottom(x).tickSize(0));
+        .call(d3.axisBottom(x).tickSize(0));
         
     xAxis.selectAll("text")
         .attr("transform", "rotate(-45)")
@@ -116,7 +116,7 @@ export const WaterfallChart: React.FC<ChartProps> = ({ data, height = 350, isPri
         
     xAxis.select(".domain").remove();
     
-    const yAxis = g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`));
+    const yAxis = g.append("g").call(d3.axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`));
     yAxis.select(".domain").remove();
     yAxis.selectAll("text").attr("fill", textColor);
     yAxis.selectAll("line").attr("stroke", gridColor);

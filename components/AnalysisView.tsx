@@ -1,6 +1,6 @@
 
 import React, { useState, useContext } from 'react';
-import { Filter, Calendar, Layers, ChevronDown, BarChart2, TrendingUp, Activity, Grip, LayoutList, LayoutGrid, Hash, Eye, EyeOff, BarChart, GitMerge } from 'lucide-react';
+import { Filter, Calendar, Layers, ChevronDown, BarChart2, TrendingUp, SlidersVertical, Grip, LayoutList, LayoutGrid, Hash, Eye, EyeOff, BarChart, GitMerge } from 'lucide-react';
 import { Transaction, CategoryItem } from '../types';
 import { CURRENCY_FORMATTER } from '../constants';
 import { SankeyDiagram } from './SankeyDiagram';
@@ -159,7 +159,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({ transactions, catego
                )}
                <div className="flex bg-slate-50 dark:bg-slate-700 p-1 rounded-lg">
                   <button onClick={() => setFinancialViewMode('COMBO')} className={`p-2 rounded-md transition-all ${financialViewMode === 'COMBO' ? 'bg-white dark:bg-slate-600 shadow-sm text-indigo-600 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}><BarChart2 size={16} /></button>
-                  <button onClick={() => setFinancialViewMode('DIFFERENCE')} className={`p-2 rounded-md transition-all ${financialViewMode === 'DIFFERENCE' ? 'bg-white dark:bg-slate-600 shadow-sm text-indigo-600 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}><Activity size={16} /></button>
+                  <button onClick={() => setFinancialViewMode('DIFFERENCE')} className={`p-2 rounded-md transition-all ${financialViewMode === 'DIFFERENCE' ? 'bg-white dark:bg-slate-600 shadow-sm text-indigo-600 dark:text-indigo-300' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}><SlidersVertical size={16} /></button>
                </div>
             </div>
          </div>

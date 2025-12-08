@@ -125,7 +125,16 @@ export const calculateAnalysis = (payload: AnalysisPayload) => {
        }
     });
     
-    buckets.forEach(b => { b.savingsRate = b.income > 0 ? (b.savings / b.income) * 100 : 0; });
+    // Calculate Rates safely
+    buckets.forEach(b => { 
+        if (b.income > 0) {
+            b.savingsRate = (b.savings / b.income) * 100;
+        } else if (b.savings > 0) {
+            b.savingsRate = 100; // All savings, no income recorded (edge case)
+        } else {
+            b.savingsRate = 0;
+        }
+    });
 
     // --- 4. Waterfall Data ---
     let totalIncome = 0;

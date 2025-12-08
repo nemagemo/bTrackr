@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { select, scaleLinear, axisLeft, axisBottom, line as d3Line, curveMonotoneX, max } from 'd3';
+import * as d3 from 'd3';
 import { useChartDimensions } from '../../hooks/useChartDimensions';
 import { ChartProps, formatValue } from './types';
 
@@ -9,7 +9,7 @@ export const CumulativeChart: React.FC<ChartProps & { series: { label: string, d
 
   useEffect(() => {
     if (!width || series.length === 0) return;
-    const svg = select(ref.current).select('svg');
+    const svg = d3.select(ref.current).select('svg');
     svg.selectAll("*").remove();
 
     const margin = { top: 20, right: 30, bottom: 30, left: 50 };
@@ -17,18 +17,18 @@ export const CumulativeChart: React.FC<ChartProps & { series: { label: string, d
     const chartHeight = height - margin.top - margin.bottom;
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const x = scaleLinear().domain([1, 31]).range([0, chartWidth]);
-    const maxVal = max(series, s => max(s.data, d => d.value)) || 0;
-    const y = scaleLinear().domain([0, maxVal]).nice().range([chartHeight, 0]);
+    const x = d3.scaleLinear().domain([1, 31]).range([0, chartWidth]);
+    const maxVal = d3.max(series, s => d3.max(s.data, d => d.value)) || 0;
+    const y = d3.scaleLinear().domain([0, maxVal]).nice().range([chartHeight, 0]);
 
-    g.append("g").attr("class", "grid").call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
+    g.append("g").attr("class", "grid").call(d3.axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => "")).selectAll("line").attr("stroke", "#e2e8f0").attr("stroke-dasharray", "3,3");
 
-    const line = d3Line<{ day: number, value: number }>()
+    const line = d3.line<{ day: number, value: number }>()
       .x(d => x(d.day))
       .y(d => y(d.value))
-      .curve(curveMonotoneX);
+      .curve(d3.curveMonotoneX);
 
-    const tooltip = select(ref.current).select(".tooltip");
+    const tooltip = d3.select(ref.current).select(".tooltip");
 
     series.forEach(s => {
        g.append("path")
@@ -48,7 +48,7 @@ export const CumulativeChart: React.FC<ChartProps & { series: { label: string, d
         .attr("fill", s.color)
         .attr("opacity", 0) 
         .on("mouseenter", (event, d) => {
-           select(event.currentTarget).attr("opacity", 1).attr("r", 5);
+           d3.select(event.currentTarget).attr("opacity", 1).attr("r", 5);
            tooltip.style("opacity", 1)
                   .html(`<div><strong>Dzień ${d.day}</strong></div><div style="color:${s.color}">${s.label}: ${formatValue(d.value, isPrivateMode)}</div>`)
                   .style("left", `${event.clientX + 10}px`)
@@ -56,7 +56,7 @@ export const CumulativeChart: React.FC<ChartProps & { series: { label: string, d
         })
         .on("mousemove", (event) => tooltip.style("left", `${event.clientX + 10}px`).style("top", `${event.clientY + 10}px`))
         .on("mouseleave", (event) => {
-           select(event.currentTarget).attr("opacity", 0).attr("r", 3);
+           d3.select(event.currentTarget).attr("opacity", 0).attr("r", 3);
            tooltip.style("opacity", 0);
         });
        
@@ -77,8 +77,8 @@ export const CumulativeChart: React.FC<ChartProps & { series: { label: string, d
         .on("mouseleave", () => tooltip.style("opacity", 0));
     });
 
-    g.append("g").attr("transform", `translate(0,${chartHeight})`).call(axisBottom(x).ticks(10)).select(".domain").remove();
-    g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
+    g.append("g").attr("transform", `translate(0,${chartHeight})`).call(d3.axisBottom(x).ticks(10)).select(".domain").remove();
+    g.append("g").call(d3.axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`)).select(".domain").remove();
 
   }, [series, width, height, isPrivateMode]);
 

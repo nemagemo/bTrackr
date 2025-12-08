@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { select, scaleLinear, scaleOrdinal, axisLeft, axisBottom, line as d3Line, curveMonotoneX, scalePoint, max } from 'd3';
+import * as d3 from 'd3';
 import { useChartDimensions } from '../../hooks/useChartDimensions';
 import { ChartProps, formatValue } from './types';
 
@@ -18,7 +18,7 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
 
   useEffect(() => {
     if (!width || !data || !data.length) return;
-    const svg = select(ref.current).select('svg');
+    const svg = d3.select(ref.current).select('svg');
     svg.selectAll("*").remove();
 
     const margin = { top: 20, right: 20, bottom: 30, left: 50 };
@@ -32,22 +32,22 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
     const tooltipBorder = isDarkMode ? "#334155" : "#e2e8f0";
     const tooltipText = isDarkMode ? "#f8fafc" : "#1e293b";
 
-    const x = scalePoint().domain(data.map(d => String(d.name))).range([0, chartWidth]);
+    const x = d3.scalePoint().domain(data.map(d => String(d.name))).range([0, chartWidth]);
     
-    const maxY = max(data, d => Math.max(...keys.map(k => d[k] || 0))) || 0;
-    const y = scaleLinear().domain([0, maxY]).nice().range([chartHeight, 0]);
-    const colorScale = scaleOrdinal().domain(keys).range(colors);
+    const maxY = d3.max(data, d => Math.max(...keys.map(k => d[k] || 0))) || 0;
+    const y = d3.scaleLinear().domain([0, maxY]).nice().range([chartHeight, 0]);
+    const colorScale = d3.scaleOrdinal().domain(keys).range(colors);
 
     g.append("g").attr("class", "grid")
-     .call(axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
+     .call(d3.axisLeft(y).ticks(5).tickSize(-chartWidth).tickFormat(() => ""))
      .selectAll("line").attr("stroke", gridColor).attr("stroke-dasharray", "3,3");
 
-    const line = d3Line<any>()
+    const line = d3.line<any>()
       .x(d => x(String(d.name)) || 0)
       .y(d => y(d.value))
-      .curve(curveMonotoneX);
+      .curve(d3.curveMonotoneX);
 
-    const tooltip = select(ref.current).select(".tooltip");
+    const tooltip = d3.select(ref.current).select(".tooltip");
     tooltip.style("background-color", tooltipBg).style("border-color", tooltipBorder).style("color", tooltipText);
 
     const sortedKeys = [...keys].sort((a, b) => {
@@ -81,7 +81,7 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
         .attr("fill", finalColor)
         .attr("opacity", isHighlighted ? 1 : 0.7)
         .on("mouseenter", (event, d) => {
-            select(event.currentTarget).attr("r", 6).attr("opacity", 1);
+            d3.select(event.currentTarget).attr("r", 6).attr("opacity", 1);
             tooltip.style("opacity", 1)
                    .html(`<div><strong>${d.name}</strong></div><div style="color:${finalColor}; font-weight:${isHighlighted?'bold':'normal'}">${key}: ${formatValue(d.value, isPrivateMode)}</div>`)
                    .style("left", `${event.clientX + 10}px`)
@@ -89,7 +89,7 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
         })
         .on("mousemove", (event) => tooltip.style("left", `${event.clientX + 10}px`).style("top", `${event.clientY + 10}px`))
         .on("mouseleave", (event) => {
-            select(event.currentTarget).attr("r", isHighlighted ? 4 : 3).attr("opacity", isHighlighted ? 1 : 0.7);
+            d3.select(event.currentTarget).attr("r", isHighlighted ? 4 : 3).attr("opacity", isHighlighted ? 1 : 0.7);
             tooltip.style("opacity", 0);
         });
     });
@@ -99,18 +99,18 @@ export const MultiLineChart: React.FC<ChartProps & { keys: string[], highlightKe
     const tickValues = data.map(d => String(d.name)).filter((_, i) => i % interval === 0);
 
     const xAxis = g.append("g").attr("transform", `translate(0,${chartHeight})`)
-        .call(axisBottom(x).tickValues(tickValues).tickSize(0));
+        .call(d3.axisBottom(x).tickValues(tickValues).tickSize(0));
     xAxis.select(".domain").remove();
     xAxis.selectAll("text").attr("fill", textColor);
     
-    const yAxis = g.append("g").call(axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`));
+    const yAxis = g.append("g").call(d3.axisLeft(y).ticks(5).tickFormat((d: any) => isPrivateMode ? '' : `${d}`));
     yAxis.select(".domain").remove();
     yAxis.selectAll("text").attr("fill", textColor);
     yAxis.selectAll("line").attr("stroke", gridColor);
 
   }, [data, width, height, keys, colors, isPrivateMode, highlightKey, highlightStrokeWidth, isDarkMode]);
 
-  const colorScale = scaleOrdinal().domain(keys).range(colors);
+  const colorScale = d3.scaleOrdinal().domain(keys).range(colors);
 
   return (
     <div ref={ref} className="relative w-full">

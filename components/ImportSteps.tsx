@@ -22,8 +22,8 @@ export const StepUpload: React.FC<StepUploadProps> = ({ onFileUpload, error }) =
        <p className="text-slate-600 dark:text-slate-300 font-medium">Upuść plik lub kliknij, aby wybrać</p>
        <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 text-center max-w-md">
           Obsługiwane: <br/>
-          <strong>.csv</strong> - wyciągi bankowe<br/>
-          <strong>.json</strong> - kopie zapasowe LUB listy transakcji
+          <strong>.csv</strong> - wyciągi bankowe LUB listy transakcji<br/>
+          <strong>.json</strong> - kopie zapasowe bTrackr LUB listy transakcji
        </p>
        {error && <p className="text-red-500 dark:text-red-400 mt-2 font-medium bg-red-50 dark:bg-red-900/30 px-3 py-1 rounded">{error}</p>}
      </div>
