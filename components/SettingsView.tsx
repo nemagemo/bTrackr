@@ -8,7 +8,6 @@ import { CURRENCY_FORMATTER } from '../constants';
 import { Button } from './Button';
 import { useFinance } from '../context/FinanceContext';
 import { useGoogleDrive } from '../hooks/useGoogleDrive';
-import { useLocalStorage } from '../hooks/useLocalStorage';
 
 interface SettingsViewProps {
   categories: CategoryItem[];
@@ -115,25 +114,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Google Drive Hook
   const { 
     isAuthenticated, isInitialized, isLoading: isDriveLoading, error: driveError, lastSyncTime,
-    initClient, handleLogin, handleLogout, uploadBackup, downloadBackup 
+    handleLogin, handleLogout, uploadBackup, downloadBackup 
   } = useGoogleDrive();
-
-  // Store Client ID locally
-  const [googleClientId, setGoogleClientId] = useLocalStorage('btrackr_google_client_id', '');
-  const [showClientIdInput, setShowClientIdInput] = useState(false);
-
-  useEffect(() => {
-    if (googleClientId) {
-        initClient(googleClientId);
-    }
-  }, []); // Run once on mount if ID exists, or when ID is saved
-
-  const handleSaveClientId = () => {
-      if (googleClientId) {
-          initClient(googleClientId);
-          setShowClientIdInput(false);
-      }
-  };
 
   const [activeTab, setActiveTab] = useState<TransactionType>(TransactionType.EXPENSE);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -333,99 +315,59 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       
       {/* Cloud Sync Section */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 w-full transition-colors">
-         <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-            <Cloud size={24} className="text-sky-500" /> Synchronizacja w Chmurze (Google Drive)
-         </h2>
+         <div className="flex justify-between items-start mb-2">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Cloud size={24} className="text-sky-500" /> Synchronizacja w Chmurze (Google Drive)
+            </h2>
+         </div>
          <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
             Zapisz swoje dane bezpiecznie na prywatnym Dysku Google. Twoje dane pozostają Twoje.
          </p>
 
-         {/* Configuration Alert if missing Client ID */}
-         {!isInitialized && !googleClientId && (
-             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 mb-4">
-                 <div className="flex gap-2 items-start">
-                     <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 mt-0.5" />
-                     <div className="flex-1">
-                         <h4 className="text-sm font-bold text-amber-800 dark:text-amber-300">Wymagana konfiguracja</h4>
-                         <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                             Aby korzystać z synchronizacji Google, musisz podać własne <strong>Client ID</strong> z Google Cloud Console (projekt z włączonym Google Drive API).
-                         </p>
-                         <button 
-                            onClick={() => setShowClientIdInput(!showClientIdInput)}
-                            className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-2 hover:underline"
-                         >
-                            {showClientIdInput ? 'Ukryj konfigurację' : 'Skonfiguruj Client ID'}
-                         </button>
-                     </div>
-                 </div>
+         {driveError && (
+             <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 p-3 rounded-lg text-sm mb-4">
+                 {driveError}
              </div>
          )}
 
-         {/* Client ID Input */}
-         {(showClientIdInput || (!googleClientId && !isInitialized)) && (
-             <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">Google Client ID</label>
-                 <div className="flex gap-2">
-                     <input 
-                        type="text" 
-                        value={googleClientId}
-                        onChange={(e) => setGoogleClientId(e.target.value)}
-                        placeholder="np. 123456789-abc.apps.googleusercontent.com"
-                        className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                     />
-                     <Button onClick={handleSaveClientId} disabled={!googleClientId}>Zapisz</Button>
-                 </div>
-                 <p className="text-[10px] text-slate-400 mt-2">ID jest zapisywane tylko w pamięci lokalnej przeglądarki.</p>
+         {!isAuthenticated ? (
+             <div className="space-y-4">
+                <Button 
+                    onClick={handleLogin} 
+                    disabled={isDriveLoading} 
+                    className="w-full sm:w-auto self-start bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-white dark:border-slate-600 dark:hover:bg-slate-600"
+                >
+                    {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <Cloud size={18} />}
+                    Połącz z Google Drive
+                </Button>
              </div>
-         )}
-
-         {/* Drive Actions */}
-         {googleClientId && (
-             <div className="flex flex-col gap-4">
-                 {driveError && (
-                     <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 p-3 rounded-lg text-sm mb-2">
-                         {driveError}
+         ) : (
+             <div className="space-y-4">
+                 <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
+                     <div className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300 font-medium">
+                         <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                         Połączono z Google Drive
                      </div>
-                 )}
+                     <button onClick={handleLogout} className="text-xs text-slate-500 hover:text-red-500 flex items-center gap-1 transition-colors">
+                         <LogOut size={12} /> Wyloguj
+                     </button>
+                 </div>
 
-                 {!isAuthenticated ? (
-                     <Button 
-                        onClick={handleLogin} 
-                        disabled={isDriveLoading || !isInitialized} 
-                        className="w-full sm:w-auto self-start bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-white dark:border-slate-600 dark:hover:bg-slate-600"
-                     >
-                        {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <Cloud size={18} />}
-                        Połącz z Google Drive
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                     <Button onClick={handleDriveUpload} disabled={isDriveLoading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                        {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18} />}
+                        Wyślij Backup do Chmury
                      </Button>
-                 ) : (
-                     <div className="space-y-4">
-                         <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-900/30">
-                             <div className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300 font-medium">
-                                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                 Połączono z Google Drive
-                             </div>
-                             <button onClick={handleLogout} className="text-xs text-slate-500 hover:text-red-500 flex items-center gap-1 transition-colors">
-                                 <LogOut size={12} /> Wyloguj
-                             </button>
-                         </div>
-
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                             <Button onClick={handleDriveUpload} disabled={isDriveLoading} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                                {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18} />}
-                                Wyślij Backup do Chmury
-                             </Button>
-                             <Button onClick={handleDriveDownload} disabled={isDriveLoading} variant="secondary">
-                                {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <CloudRain size={18} />}
-                                Przywróć z Chmury
-                             </Button>
-                         </div>
-                         
-                         {lastSyncTime && (
-                             <p className="text-xs text-slate-400 text-center">
-                                 Ostatnia synchronizacja: {lastSyncTime}
-                             </p>
-                         )}
-                     </div>
+                     <Button onClick={handleDriveDownload} disabled={isDriveLoading} variant="secondary">
+                        {isDriveLoading ? <Loader2 className="animate-spin" size={18}/> : <CloudRain size={18} />}
+                        Przywróć z Chmury
+                     </Button>
+                 </div>
+                 
+                 {lastSyncTime && (
+                     <p className="text-xs text-slate-400 text-center">
+                         Ostatnia synchronizacja: {lastSyncTime}
+                     </p>
                  )}
              </div>
          )}

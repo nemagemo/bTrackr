@@ -1,5 +1,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
+import { GOOGLE_CLIENT_ID } from '../constants';
 
 // Scope for accessing only files created by this app
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
@@ -11,7 +12,6 @@ interface UseGoogleDriveReturn {
   isInitialized: boolean;
   isLoading: boolean;
   userEmail: string | null;
-  initClient: (clientId: string) => Promise<void>;
   handleLogin: () => void;
   handleLogout: () => void;
   uploadBackup: (data: string) => Promise<void>;
@@ -31,56 +31,61 @@ export const useGoogleDrive = (): UseGoogleDriveReturn => {
     localStorage.getItem('btrackr_last_sync')
   );
 
-  // Initialize GAPI and Identity Services
-  const initClient = useCallback(async (clientId: string) => {
-    if (!clientId) {
-        setError("Brak Client ID.");
-        return;
+  // Initialize GAPI and Identity Services automatically
+  useEffect(() => {
+    // If no client ID is set in constants, we can't initialize
+    if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('WKLEJ_TUTAJ')) {
+        // Silent fail or just don't init, user will see error when trying to click
+        return; 
     }
-    
-    setIsLoading(true);
-    setError(null);
 
-    try {
-      // 1. Load GAPI client
-      await new Promise<void>((resolve, reject) => {
-        if ((window as any).gapi) resolve();
-        else reject("GAPI not loaded");
-      });
+    const init = async () => {
+        setIsLoading(true);
+        try {
+            // 1. Load GAPI client
+            await new Promise<void>((resolve, reject) => {
+                if ((window as any).gapi) resolve();
+                else reject("GAPI not loaded");
+            });
 
-      await new Promise<void>((resolve) => {
-        (window as any).gapi.load('client', resolve);
-      });
+            await new Promise<void>((resolve) => {
+                (window as any).gapi.load('client', resolve);
+            });
 
-      await (window as any).gapi.client.init({
-        discoveryDocs: [DISCOVERY_DOC],
-      });
+            await (window as any).gapi.client.init({
+                discoveryDocs: [DISCOVERY_DOC],
+            });
 
-      // 2. Initialize Token Client
-      if ((window as any).google) {
-        const client = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: SCOPES,
-          callback: (tokenResponse: any) => {
-            if (tokenResponse && tokenResponse.access_token) {
-              setIsAuthenticated(true);
-              // Optimistically set email if available in response, usually needs separate call
-              // We'll fetch user info later or rely on token validity
+            // 2. Initialize Token Client
+            if ((window as any).google) {
+                const client = (window as any).google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: SCOPES,
+                callback: (tokenResponse: any) => {
+                    if (tokenResponse && tokenResponse.access_token) {
+                    setIsAuthenticated(true);
+                    }
+                },
+                });
+                setTokenClient(client);
+                setIsInitialized(true);
             }
-          },
-        });
-        setTokenClient(client);
-        setIsInitialized(true);
-      }
-    } catch (err: any) {
-      console.error("Google Init Error:", err);
-      setError("Nie udało się połączyć z usługami Google.");
-    } finally {
-      setIsLoading(false);
-    }
+        } catch (err: any) {
+            console.error("Google Init Error:", err);
+            setError("Nie udało się połączyć z usługami Google.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    init();
   }, []);
 
   const handleLogin = () => {
+    if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('WKLEJ_TUTAJ')) {
+        alert("Błąd konfiguracji developera: Brak Client ID w pliku constants.ts");
+        return;
+    }
     if (tokenClient) {
       tokenClient.requestAccessToken({ prompt: 'consent' });
     }
@@ -201,7 +206,6 @@ export const useGoogleDrive = (): UseGoogleDriveReturn => {
     isInitialized,
     isLoading,
     userEmail,
-    initClient,
     handleLogin,
     handleLogout,
     uploadBackup,
