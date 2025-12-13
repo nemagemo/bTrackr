@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, Sun, Moon } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, Sun, Moon, Monitor, Smartphone, ArrowRight } from 'lucide-react';
 import { Logo } from './Logo';
 import { Footer } from './Footer';
 
@@ -27,8 +27,41 @@ export const Layout: React.FC<LayoutProps> = ({
   togglePrivateMode,
   onOpenImport
 }) => {
+  const [showMobileWarning, setShowMobileWarning] = useState(true);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 pb-20 md:pb-0 transition-colors duration-300 flex flex-col">
+      
+      {/* Mobile Optimization Warning Overlay */}
+      {showMobileWarning && (
+        <div className="fixed inset-0 z-[100] bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center lg:hidden animate-fade-in">
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-full shadow-lg mb-6 ring-4 ring-slate-100 dark:ring-slate-700">
+            <Monitor size={48} className="text-indigo-600 dark:text-indigo-400" />
+          </div>
+          
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
+            Wersja Desktopowa
+          </h2>
+          
+          <p className="text-slate-500 dark:text-slate-400 max-w-xs mb-8 leading-relaxed">
+            bTrackr został zaprojektowany z myślą o dużych ekranach, aby zapewnić najlepszą czytelność wykresów i analiz.
+          </p>
+
+          <button 
+            onClick={() => setShowMobileWarning(false)}
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-all shadow-md shadow-indigo-200 dark:shadow-none active:scale-95"
+          >
+            <Smartphone size={18} />
+            <span>Używaj na telefonie</span>
+            <ArrowRight size={16} className="opacity-60" />
+          </button>
+          
+          <p className="text-[10px] text-slate-400 mt-6 uppercase tracking-wider">
+            Zalecamy rozdzielczość 1024px+
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between relative">
