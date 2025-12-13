@@ -61,12 +61,12 @@ const AppContent: React.FC = () => {
         message: 'W historii istnieją już transakcje. Czy chcesz je USUNĄĆ i załadować przykładowe dane demo? Tej operacji nie można cofnąć.',
         action: () => {
            loadDemoData(); 
-           setActiveTab('analysis');
+           // Pozostajemy na obecnej zakładce (zazwyczaj dashboard)
         },
       });
     } else {
       loadDemoData();
-      setActiveTab('analysis');
+      // Pozostajemy na obecnej zakładce
     }
   };
 

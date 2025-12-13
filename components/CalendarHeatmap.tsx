@@ -247,23 +247,38 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
         .sort((a, b) => a.name.localeCompare(b.name, 'pl')),
   [categories, usedCategoryIds]);
 
+  // Determine which years to show
+  const availableYears = useMemo(() => {
+     // Based on filteredTransactions if needed, but for sizing, general years are enough
+     const years = new Set(transactions.map(t => new Date(t.date).getFullYear()));
+     return Array.from(years).sort((a: number, b: number) => b - a);
+  }, [transactions]);
+
   // Measure width
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
         // Use clientWidth to account for padding/scrollbars correctly, fallback to offsetWidth
         const newWidth = containerRef.current.clientWidth || containerRef.current.offsetWidth;
-        if (newWidth > 0) setWidth(newWidth);
+        // Only update if changed or strictly positive
+        if (newWidth > 0) setWidth(prev => (prev !== newWidth ? newWidth : prev));
       }
     };
+    
+    // Initial measure
     updateWidth();
-    // Use a small timeout to ensure layout is settled in some cases
-    setTimeout(updateWidth, 100); 
+    
+    // Fallback delay to ensure layout is settled
+    const timer = setTimeout(updateWidth, 100); 
     
     const observer = new ResizeObserver(updateWidth);
     if (containerRef.current) observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
+    
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [availableYears.length]); // Add dependency on data length to re-measure when content appears
 
   // Filter transactions by selected category AND exclude savings
   const filteredTxs = useMemo(() => {
@@ -275,8 +290,8 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
       return txs.filter(t => !savingsCategoryIds.has(t.categoryId));
   }, [transactions, selectedCategoryId, savingsCategoryIds]);
 
-  // Determine which years to show
-  const availableYears = useMemo(() => {
+  // Re-calculate available years based on filtered data for display
+  const yearsToDisplay = useMemo(() => {
      if (periodType === 'ALL') {
         const years = new Set(filteredTxs.map(t => new Date(t.date).getFullYear()));
         return Array.from(years).sort((a: number, b: number) => b - a); // Descending
@@ -285,10 +300,10 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
   }, [periodType, year, filteredTxs]);
 
   const visibleYears = useMemo(() => {
-      if (periodType !== 'ALL') return availableYears;
-      if (showAllYears) return availableYears;
-      return availableYears.slice(0, 2);
-  }, [availableYears, showAllYears, periodType]);
+      if (periodType !== 'ALL') return yearsToDisplay;
+      if (showAllYears) return yearsToDisplay;
+      return yearsToDisplay.slice(0, 2);
+  }, [yearsToDisplay, showAllYears, periodType]);
 
   // Pre-calculate data for each year (SPLIT MODE)
   const dataByYear = useMemo(() => {
@@ -406,7 +421,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                               />
                            ))}
                            
-                           {periodType === 'ALL' && availableYears.length > 2 && (
+                           {periodType === 'ALL' && yearsToDisplay.length > 2 && (
                               <div className="flex justify-center mt-4 mb-4">
                                   <button 
                                       onClick={() => setShowAllYears(!showAllYears)}
@@ -418,7 +433,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ transactions, 
                                           </>
                                       ) : (
                                           <>
-                                              <ChevronDown size={14} /> Pokaż starsze lata ({availableYears.length - 2})
+                                              <ChevronDown size={14} /> Pokaż starsze lata ({yearsToDisplay.length - 2})
                                           </>
                                       )}
                                   </button>
