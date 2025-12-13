@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, Upload, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, Sun, Moon } from 'lucide-react';
 import { Logo } from './Logo';
 import { Footer } from './Footer';
 
@@ -47,25 +47,18 @@ export const Layout: React.FC<LayoutProps> = ({
           {/* Actions */}
           <div className="flex items-center gap-1">
             <button 
-               onClick={toggleTheme}
-               className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-               title={theme === 'dark' ? "Tryb jasny" : "Tryb ciemny"}
-            >
-               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-            <button 
-               onClick={onOpenImport}
-               className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-               title="Importuj dane"
-            >
-               <Upload size={20} />
-            </button>
-            <button 
                onClick={togglePrivateMode}
                className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                title={isPrivateMode ? "Pokaż kwoty" : "Ukryj kwoty"}
             >
                {isPrivateMode ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+            <button 
+               onClick={toggleTheme}
+               className="p-2 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+               title={theme === 'dark' ? "Tryb jasny" : "Tryb ciemny"}
+            >
+               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
           </div>
         </div>
