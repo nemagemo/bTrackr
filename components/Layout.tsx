@@ -2,6 +2,7 @@
 import React from 'react';
 import { LayoutDashboard, LineChart, History, Settings, Eye, EyeOff, Upload, Sun, Moon } from 'lucide-react';
 import { Logo } from './Logo';
+import { Footer } from './Footer';
 
 export type Tab = 'dashboard' | 'analysis' | 'history' | 'settings';
 
@@ -27,7 +28,7 @@ export const Layout: React.FC<LayoutProps> = ({
   onOpenImport
 }) => {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 pb-20 md:pb-0 transition-colors duration-300">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 pb-20 md:pb-0 transition-colors duration-300 flex flex-col">
       {/* Header */}
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between relative">
@@ -71,9 +72,12 @@ export const Layout: React.FC<LayoutProps> = ({
       </header>
 
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 flex-1">
         {children}
       </main>
+
+      {/* Footer */}
+      <Footer />
 
       {/* Mobile Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 py-2 flex justify-around z-50 pb-safe">
